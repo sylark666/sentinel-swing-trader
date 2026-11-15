@@ -1,10 +1,11 @@
 """
 live_market_service.py
 ======================
-The automated orchestrator that runs at the 3 NSE market checkpoints:
-- 09:25 AM IST: Gap check & Initial Hard Stop loss verification.
-- 01:18 PM IST: Mid-day 4H bar close evaluation (Exits first, then top buy signals).
-- 03:32 PM IST: Market close 4H bar close evaluation & Daily Summary dispatch.
+The automated orchestrator that runs at the 4 NSE market checkpoints:
+- 09:45 AM IST: Morning volatility bypass & swing check.
+- 01:15 PM IST: 4-Hour bar completion & trailing stop adjustment (feed syncs bar completed at 13:15).
+- 03:20 PM IST: Pre-market close assessment (10 mins before close for manual broker execution).
+- 05:00 PM IST: Post-market close assessment, finalized Bhavcopy settlement & Daily Summary.
 
 Integrates:
 1. Incremental 4H candle sync via update_market_data.py.
@@ -214,13 +215,13 @@ def execute_checkpoint_scan(checkpoint_name: str = "Mid-Day"):
 
 def run_market_scheduler():
     """
-    Main loop that triggers the 3 market checkpoints during trading days:
-    - 09:25 AM IST
-    - 01:18 PM IST
-    - 03:32 PM IST
-    And 03:45 PM IST for Daily Summary.
+    Main loop that triggers the 4 market checkpoints during trading days:
+    - 09:45 AM IST: Morning volatility bypass & swing check.
+    - 01:20 PM IST: 4-Hour bar completion (13:15 bar with 12-15m feed latency buffer) & trailing stop adjustment.
+    - 03:20 PM IST: Pre-market close assessment (10 mins before close for order execution).
+    - 05:00 PM IST: Post-market close assessment, finalized Bhavcopy settlement & Daily Summary.
     """
-    logger.info("Live Market Service running in background. Waiting for market checkpoints...")
+    logger.info("Live Market Service running in background. Waiting for 4 market checkpoints...")
 
     checkpoints_fired_today = set()
     current_date = datetime.now(IST).date()
@@ -239,30 +240,34 @@ def run_market_scheduler():
         if is_market_open_today():
             curr_time = now_ist.time()
 
-            # Checkpoint 1: 09:25 AM
-            if dtime(9, 25) <= curr_time <= dtime(9, 35) and "CP1" not in checkpoints_fired_today:
-                execute_checkpoint_scan("Checkpoint 1 (09:25 AM Gap & Stop Check)")
+            # Checkpoint 1: 09:45 AM (Morning volatility bypass & swing check)
+            if dtime(9, 45) <= curr_time <= dtime(9, 58) and "CP1" not in checkpoints_fired_today:
+                execute_checkpoint_scan("Checkpoint 1 (09:45 AM Volatility Bypass & Swing Check)")
                 checkpoints_fired_today.add("CP1")
 
-            # Checkpoint 2: 01:18 PM
-            elif dtime(13, 18) <= curr_time <= dtime(13, 28) and "CP2" not in checkpoints_fired_today:
-                execute_checkpoint_scan("Checkpoint 2 (01:18 PM Mid-Day 4H Bar Close)")
+            # Checkpoint 2: 01:20 PM (01:15 PM 4H Bar completion with feed delay buffer)
+            elif dtime(13, 15) <= curr_time <= dtime(13, 30) and "CP2" not in checkpoints_fired_today:
+                execute_checkpoint_scan("Checkpoint 2 (01:15 PM 4H Bar Completion & Trailing Stop Adjustment)")
                 checkpoints_fired_today.add("CP2")
 
-            # Checkpoint 3: 03:32 PM
-            elif dtime(15, 32) <= curr_time <= dtime(15, 42) and "CP3" not in checkpoints_fired_today:
-                execute_checkpoint_scan("Checkpoint 3 (03:32 PM Market Close 4H Bar Close)")
+            # Checkpoint 3: 03:20 PM (Pre-market close assessment before 03:30 closing bell)
+            elif dtime(15, 20) <= curr_time <= dtime(15, 30) and "CP3" not in checkpoints_fired_today:
+                execute_checkpoint_scan("Checkpoint 3 (03:20 PM Pre-Market Close Assessment)")
                 checkpoints_fired_today.add("CP3")
 
-            # Daily Summary: 03:45 PM
-            elif dtime(15, 45) <= curr_time <= dtime(15, 55) and "SUMMARY" not in checkpoints_fired_today:
+            # Checkpoint 4: 05:00 PM (Post-market close assessment & Daily Summary)
+            elif dtime(17, 0) <= curr_time <= dtime(17, 20) and "CP4" not in checkpoints_fired_today:
+                execute_checkpoint_scan("Checkpoint 4 (05:00 PM Post-Market Close Assessment)")
+                
+                # Dispatch comprehensive end-of-day summary
                 summary = pm.get_portfolio_summary()
                 active = pm.get_active_trades()
                 df_closed = pm.get_closed_trades_df()
                 csv_path = "trades_ledger_export.csv"
                 df_closed.to_csv(csv_path, index=False)
                 notif.dispatch_daily_summary(summary, active, csv_attachment=csv_path)
-                checkpoints_fired_today.add("SUMMARY")
+                
+                checkpoints_fired_today.add("CP4")
 
         time.sleep(30)
 
