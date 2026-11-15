@@ -99,18 +99,28 @@ def compute_indicators(df: pd.DataFrame) -> pd.DataFrame:
 
     return df
 
-def get_market_regime(timeframe: str = "1D") -> Dict:
+def get_market_regime(timeframe: str = "4H") -> Dict:
     """
     Evaluates broader market regime from NIFTY index.
     Bullish regime when Nifty > 50 EMA.
+    Falls back gracefully between 4H and 1D.
     """
     df_nifty = load_candles_from_db("NIFTY", timeframe=timeframe)
     if df_nifty.empty or len(df_nifty) < 50:
+        # Fallback to 4H if 1D not in DB
+        df_nifty = load_candles_from_db("NIFTY", timeframe="4H")
+
+    if df_nifty.empty or len(df_nifty) < 50:
+        # Fallback to NIFTY.NS
+        df_nifty = load_candles_from_db("NIFTY.NS", timeframe="4H")
+
+    if df_nifty.empty or len(df_nifty) < 50:
         return {"status": "NEUTRAL", "reason": "Insufficient NIFTY data", "nifty_close": 0, "nifty_ema50": 0}
 
+    df_nifty = df_nifty.sort_values(by="timestamp").reset_index(drop=True)
     df_nifty['EMA50'] = df_nifty['close'].ewm(span=50, adjust=False).mean()
     last_row = df_nifty.iloc[-1]
-    is_bullish = last_row['close'] > last_row['EMA50']
+    is_bullish = bool(last_row['close'] > last_row['EMA50'])
 
     return {
         "status": "BULLISH" if is_bullish else "BEARISH",

@@ -522,7 +522,7 @@ with tab_radar:
     st.subheader("🎯 Daily Opportunity Radar & Capital Rotation Engine")
     st.markdown("Vectorized multi-factor screening across 490+ NSE stocks in `market_data.db`.")
     
-    regime = get_market_regime(timeframe="1D")
+    regime = get_market_regime(timeframe="4H")
     col_reg1, col_reg2, col_reg3 = st.columns(3)
     col_reg1.metric("Market Regime (Nifty 50)", regime['status'], delta=f"Close: ₹{regime['nifty_close']:,.2f}")
     col_reg2.metric("Nifty 50 EMA", f"₹{regime['nifty_ema50']:,.2f}", delta="Regime Threshold")
@@ -530,7 +530,7 @@ with tab_radar:
 
     st.markdown("---")
     c1, c2, c3 = st.columns([2, 2, 3])
-    radar_tf = c1.selectbox("Scan Timeframe", ["1D", "4H", "1H"], index=0, key="radar_tf")
+    radar_tf = c1.selectbox("Scan Timeframe", ["4H", "1D", "1H"], index=0, key="radar_tf")
     min_alpha = c2.slider("Minimum Alpha Score", min_value=50, max_value=120, value=75, step=5)
     btn_scan = c3.button("🔍 Run Full Opportunity Scan", type="primary", use_container_width=True)
 
