@@ -262,10 +262,11 @@ def log_buy_trade(ticker: str, qty: int, price: float, stop_loss: float, alpha_s
         return True, msg
 
 
-def log_partial_sell(ticker: str, qty_sold: int, exit_price: float) -> Tuple[bool, str]:
+def log_partial_sell(ticker: str, qty_sold: int, exit_price: float, custom_reason: Optional[str] = None) -> Tuple[bool, str]:
     """
     Logs a partial profit scale-out.
-    Realizes profit on sold shares, returns cash, sets remaining shares to 0.5 effective slot (runner).
+    Realizes profit on sold shares, returns cash, sets remaining shares to proportional effective slot (runner).
+    Allows multiple sequential scale-outs (e.g. 10%, 20%, 25%, 33%, 50%).
     """
     ticker = ticker.upper().strip()
     if not ticker.endswith(".NS") and ticker != "NIFTY":
@@ -285,6 +286,11 @@ def log_partial_sell(ticker: str, qty_sold: int, exit_price: float) -> Tuple[boo
 
         remaining_qty = curr_qty - qty_sold
         entry_price = pos['entry_price']
+        pct_of_pos_sold = round((qty_sold / curr_qty) * 100, 1)
+
+        # Proportional slot scaling (capped at min 0.1, max 1.0)
+        curr_slot = pos.get('effective_slot', 1.0)
+        new_effective_slot = max(0.1, round(curr_slot * (remaining_qty / curr_qty), 2))
 
         gross_buy = qty_sold * entry_price
         gross_sell = qty_sold * exit_price
@@ -299,34 +305,36 @@ def log_partial_sell(ticker: str, qty_sold: int, exit_price: float) -> Tuple[boo
         entry_dt = pd.to_datetime(pos['entry_date'])
         holding_days = (pd.to_datetime(now) - entry_dt).total_seconds() / 86400.0
 
+        exit_label = custom_reason or f"Partial Profit Scale-Out ({pct_of_pos_sold:.0f}%)"
+
         cursor.execute("""
             INSERT INTO closed_trades 
             (ticker, entry_date, exit_date, entry_price, exit_price, qty, gross_buy, gross_sell, friction, net_pnl, pnl_pct, holding_days, exit_reason)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'Partial Profit Scale-Out (50%)')
-        """, (ticker, pos['entry_date'], now, entry_price, exit_price, qty_sold, gross_buy, gross_sell, friction, round(net_pnl, 2), round(pnl_pct, 2), round(holding_days, 1)))
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """, (ticker, pos['entry_date'], now, entry_price, exit_price, qty_sold, gross_buy, gross_sell, friction, round(net_pnl, 2), round(pnl_pct, 2), round(holding_days, 1), exit_label))
 
-        # Update active holding with remaining shares and mark effective_slot = 0.5
+        # Update active holding with remaining shares and mark proportional effective_slot
         cursor.execute("""
             UPDATE active_swing_trades 
-            SET qty = ?, effective_slot = 0.5, status = 'PARTIAL_RUNNER'
+            SET qty = ?, effective_slot = ?, status = 'PARTIAL_RUNNER'
             WHERE ticker = ?
-        """, (remaining_qty, ticker))
+        """, (remaining_qty, new_effective_slot, ticker))
 
         # Credit cash
         cursor.execute("UPDATE portfolio_ledger SET cash_available = cash_available + ? WHERE id = 1", (cash_credited,))
 
         # Audit log
-        payload = {"ticker": ticker, "qty_sold": qty_sold, "exit_price": exit_price, "cash_credited": cash_credited, "remaining_qty": remaining_qty}
+        payload = {"ticker": ticker, "qty_sold": qty_sold, "exit_price": exit_price, "cash_credited": cash_credited, "remaining_qty": remaining_qty, "effective_slot": new_effective_slot}
         cursor.execute("INSERT INTO audit_log (action_type, payload_json, timestamp) VALUES ('PARTIAL_SELL', ?, ?)", (json.dumps(payload), now))
 
         conn.commit()
 
         return True, (
             f"✅ **Partial Profit Booked for `{ticker}`!**\n"
-            f"• Sold: {qty_sold} shares @ ₹{exit_price:,.2f}\n"
+            f"• Sold: **{qty_sold} shares** @ ₹{exit_price:,.2f} ({pct_of_pos_sold:.0f}% of position)\n"
             f"• Net Profit Realized: **₹{net_pnl:,.2f} ({pnl_pct:+.2f}%)**\n"
             f"• Cash Returned to Pool: ₹{cash_credited:,.2f}\n"
-            f"• Remaining: **{remaining_qty} shares** trailing as a **0.5 Effective Slot Runner**."
+            f"• Remaining: **{remaining_qty} shares** trailing as a **{new_effective_slot:.2f} Effective Slot Runner**."
         )
 
 

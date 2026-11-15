@@ -395,39 +395,64 @@ with tab_live:
 
     with col_log2:
         st.markdown("### 📤 Log Sell / Scale-Out / Vault")
-        with st.form("form_log_sell", clear_on_submit=True):
-            active_tickers = [p['ticker'].replace(".NS", "") for p in active_trades]
-            if active_tickers:
-                s_sym = st.selectbox("Select Active Position to Exit", active_tickers)
-                s_mode = st.radio("Exit Type", ["Full Exit", "Partial Profit (50%)", "Exit & Keep Some in Vault Forever"])
-                s_price = st.number_input("Executed Sell Price (₹)", min_value=0.1, value=100.0, step=0.5)
+        active_tickers = [p['ticker'].replace(".NS", "") for p in active_trades]
+        if active_tickers:
+            s_sym = st.selectbox("Select Active Position to Exit", active_tickers, key="sell_active_pos")
+            curr_p = next((p for p in active_trades if p['ticker'].replace(".NS", "") == s_sym), None)
+            curr_qty = curr_p['qty'] if curr_p else 1
+            curr_entry = float(curr_p['entry_price']) if curr_p else 100.0
 
-                s_retain = 0
-                if s_mode == "Exit & Keep Some in Vault Forever":
-                    curr_p = next((p for p in active_trades if p['ticker'].replace(".NS", "") == s_sym), None)
-                    max_retain = (curr_p['qty'] - 1) if curr_p else 1
-                    s_retain = st.number_input("Shares to Keep in Long-Term Vault Forever", min_value=1, max_value=max(1, max_retain), value=1, step=1)
+            st.caption(f"📌 Current Holding: **{curr_qty} shares** @ Entry ₹{curr_entry:,.2f}")
 
-                submit_sell = st.form_submit_button("🔴 Record Sell Execution", type="primary", use_container_width=True)
-                if submit_sell:
-                    if s_mode == "Full Exit":
-                        ok, msg = pm.log_full_sell(s_sym, s_price, reason="Manual User Exit")
-                    elif s_mode == "Partial Profit (50%)":
-                        curr_p = next((p for p in active_trades if p['ticker'].replace(".NS", "") == s_sym), None)
-                        q_half = max(1, curr_p['qty'] // 2) if curr_p else 1
-                        ok, msg = pm.log_partial_sell(s_sym, q_half, s_price)
-                    else:
-                        ok, msg = pm.log_full_sell(s_sym, s_price, reason="Manual User Exit", retain_qty=s_retain)
+            s_mode = st.radio(
+                "Exit Type", 
+                ["Full Exit (100%)", "Partial Profit / Scale-Out", "Exit & Keep Some in Vault Forever"],
+                key="sell_exit_mode"
+            )
 
-                    if ok:
-                        st.success(msg)
-                        time.sleep(1)
-                        st.rerun()
-                    else:
-                        st.error(msg)
-            else:
-                st.caption("No open positions available to sell.")
-                st.form_submit_button("No Open Positions", disabled=True)
+            q_to_sell = curr_qty
+            scale_label = "Full Exit"
+
+            if s_mode == "Partial Profit / Scale-Out":
+                scale_method = st.radio("Scale-Out By", ["Percentage (%)", "Exact Number of Shares"], horizontal=True, key="scale_out_method")
+                if scale_method == "Percentage (%)":
+                    scale_pct = st.slider("Select % of Position to Sell", min_value=5, max_value=95, value=25, step=5, help="e.g. 10%, 20%, 25%, 33%, 50%")
+                    q_to_sell = max(1, int(round(curr_qty * (scale_pct / 100.0))))
+                    scale_label = f"Partial Scale-Out ({scale_pct}%)"
+                else:
+                    max_sellable = max(1, curr_qty - 1)
+                    q_to_sell = st.number_input("Shares to Sell", min_value=1, max_value=max_sellable, value=min(max_sellable, max(1, curr_qty // 4)), step=1)
+                    calc_pct = round((q_to_sell / curr_qty) * 100, 1)
+                    scale_label = f"Partial Scale-Out ({calc_pct}%)"
+
+                remaining_shares = curr_qty - q_to_sell
+                st.info(f"📊 Selling **{q_to_sell}** of **{curr_qty}** shares. **{remaining_shares}** shares will continue trailing with Chandelier stop.")
+
+            s_price = st.number_input("Executed Sell Price (₹)", min_value=0.01, value=curr_entry, step=0.5, key="executed_sell_price")
+
+            s_retain = 0
+            if s_mode == "Exit & Keep Some in Vault Forever":
+                max_retain = max(1, curr_qty - 1)
+                s_retain = st.number_input("Shares to Keep in Long-Term Vault Forever", min_value=1, max_value=max_retain, value=1, step=1, key="vault_retain_shares")
+                st.caption(f"Transferring {s_retain} shares to Vault; selling remaining {curr_qty - s_retain} shares.")
+
+            if st.button("🔴 Record Sell Execution", type="primary", use_container_width=True, key="btn_record_sell"):
+                if s_mode == "Full Exit (100%)":
+                    ok, msg = pm.log_full_sell(s_sym, s_price, reason="Manual User Exit")
+                elif s_mode == "Partial Profit / Scale-Out":
+                    ok, msg = pm.log_partial_sell(s_sym, q_to_sell, s_price, custom_reason=scale_label)
+                else:
+                    ok, msg = pm.log_full_sell(s_sym, s_price, reason="Manual User Exit", retain_qty=s_retain)
+
+                if ok:
+                    st.success(msg)
+                    time.sleep(1)
+                    st.rerun()
+                else:
+                    st.error(msg)
+        else:
+            st.caption("No open positions available to sell.")
+            st.button("No Open Positions", disabled=True, use_container_width=True, key="btn_no_pos")
 
     st.markdown("---")
 
