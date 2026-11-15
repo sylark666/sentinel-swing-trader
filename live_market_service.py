@@ -84,7 +84,7 @@ def execute_checkpoint_scan(checkpoint_name: str = "Mid-Day"):
 
     # 1. Incremental DB update
     try:
-        update_database_incremental(timeframe="4H", limit_days=5)
+        update_database_incremental(timeframe="4H")
     except Exception as e:
         logger.error(f"Incremental DB update error: {e}")
 
