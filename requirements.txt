@@ -6,4 +6,6 @@ requests>=2.28.0
 python-dotenv>=1.0.0
 websocket-client>=1.6.0
 tqdm>=4.65.0
+yfinance>=0.2.30
+pytz>=2023.3
 git+https://github.com/rongardF/tvdatafeed.git
