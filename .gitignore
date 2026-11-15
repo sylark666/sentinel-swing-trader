@@ -5,7 +5,6 @@ alert_config.json
 
 # Heavy Database & Caches (GitHub blocks files > 100MB)
 market_data.db
-portfolio_tracker.db
 market_data_cache/
 *.log
 
