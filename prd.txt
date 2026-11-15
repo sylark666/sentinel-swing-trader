@@ -1,0 +1,93 @@
+System Architecture & Specification Document: Project Sentinel-Swing (v2.0)
+1. Project Overview & Objective
+Project Sentinel-Swing is a fully automated, cloud-native algorithmic swing trading system engineered for the NSE Nifty 500 universe. The system integrates with the Zerodha Kite Connect API for live execution, risk management, and data retrieval.
+The primary objective is to execute rules-based swing trades (holding horizon: 2 to 15 days) with an absolute focus on deterministic execution, static network security, and structural protection against look-ahead bias and model overfitting.
+Core Metrics & Targets
+Target Profit: net profit per trade (fully netting out brokerage, STT, GST, exchange transaction charges, and slippage buffers).
+Operating Window: Non-intraday, non-options. Equity cash segment only.
+Model Execution Temperature: Hard-coded to 0 across all runtime environments and AI code-generation agents to guarantee strict mathematical logic.
+2. Risk Matrix & System Constraints
+The core architecture must programmatically enforce these rules at both the application state-machine layer and the database layer.
+Capital Allocation Layer: Maximum capital allocation per trade is of total current account equity.
+Concurrency Layer: Maximum of 3 concurrent open positions allowed simultaneously.
+Execution Timing Constraint: No signal scanning or entry order generation may occur before 09:45 AM IST. This bypasses the heavy structural volatility, institutional order matching, and overnight gap pricing adjustments common during the market open ().
+Order Co-dependency: Every entry order must immediately be accompanied by a co-dependent Target Limit order and a dynamic Trailing Stop-Loss Limit order.
+Asset Rotation Logic: If the system has 3 active positions and discovers a higher-ranked signal during the 09:45 AM scan, it must evaluate if the alpha differential justifies liquidating the weakest current holding to rotate capital into the new asset.
+3. Data Architecture & Multi-Timeframe Engine
+To eliminate look-ahead bias and handle live intraday data streams safely, the system utilizes a split time-series database design.
+Historical Data Layout
+Granularity: Daily bars + 15-minute granular bars for the entire Nifty 500 universe.
+Storage Engine: Local PostgreSQL with the TimescaleDB extension. Indexes must be explicitly built on (ticker_token, timestamp DESC).
+The 09:45 AM Live-Candle Synthesis Engine
+Because daily candles are incomplete at 09:45 AM, your signal script cannot use a standard historical daily bar lookup for the current day . The system must construct a Synthetic Daily Candle programmatically:
+Fetch completed daily historical bars from Day backwards.
+Query Zerodha's live market quote API via kite.quote("NSE:TICKER") at exactly 09:45 AM.
+Extract the current day's open, high, low, and last_price.
+Append this temporary synthetic candle to the historical array before passing it into your Python indicator script.
+4. Operational & Infrastructure Security
+Static IP Gateway Routing
+Zerodha enforces a strict security mandate: All API order placements must originate from a registered Static IP address. Orders coming from dynamic cloud IP pools will be instantly rejected by the broker.
+Architecture: Your cloud functions cannot hit Zerodha directly. You must deploy an AWS VPC (Virtual Private Cloud) or Google Cloud equivalent. Route all outbound Lambda execution traffic through a NAT Gateway bound to an Elastic IP (Static IP). This Elastic IP must be whitelisted in your Zerodha Developer Console.
+Exchange-Compliant Order Routing (No SL-M)
+CRITICAL EXCHANGE RULE: The NSE has discontinued Stop-Loss Market (SL-M) orders to protect against freak-trade slippages. All protective stops must use Stop-Loss Limit (SL) orders.
+The Padded Execution Strategy: To prevent a fast price crash from blowing past a standard limit order without filling it, the execution module must calculate an Execution Protection Pad.
+For a long trade with a trigger price at ₹100, the corresponding execution limit price must be hard-coded with a negative offset buffer (e.g., limit price set to ₹98). This ensures that when the exchange triggers the order at ₹100, it behaves like a market order down to ₹98, guaranteeing an immediate execution match in a falling book.
+5. Quantitative Strategy Optimization
+Volatility-Based Trailing Stop-Loss (ATR)
+Instead of an arbitrary, rigid percentage trail (which suffocates low-beta stocks and exposes high-beta stocks to premature stops), the system must utilize a dynamic Average True Range (ATR) trailing mechanism:
+Execution: Set the volatility multiplier () between via the backtest dashboard. To prevent execution whipsaws from intraday noise spikes, the calculation and tracking variables for shifting this trailing stop floor must execute strictly during the 03:25 PM IST position maintenance block.
+Time-Series Purging Framework
+When validating your Python signal scripts locally, standard K-Fold cross-validation invalidates results because swing trades hang open over multiple days, causing intense serial correlation across time frames.
+The Fix: Implement Purged Cross-Validation in the backtester engine. When partitioning data, the simulator must programmatically drop (purge) all historical daily and 15-minute data bars spanning 15 days immediately following the boundary of any training data block. This eliminates data leakage and look-ahead bias completely.
+6. Phase-by-Phase Modular Implementation Blueprint
+Module 1: Data Engine & Rate-Limited Ingestion
+Task 1.1: Initialize the local PostgreSQL database with TimescaleDB time-series indexing.
+Task 1.2: Implement the Zerodha Kite historical data collector. Write a deterministic sleep mechanism (time.sleep(0.35)) to ensure the wrapper never exceeds Zerodha’s API rate limit of 3 historical requests per second.
+Acceptance Criteria: Download 3 years of seamless 15-minute and daily bars for the Nifty 500 without triggering an API ban. Verify data integrity with a query confirming zero missing bars during market hours ().
+Use AngelOne SmartAPI (Free Broker API Alternate) or yfinance (Python Library) during the testing phase to fetch 15 min. 30 mins , 1 H, 2 H, 4H and 1D data  for Backtesting 
+Module 2: Multi-Timeframe Backtesting & Streamlit UI
+Task 2.1: Embed your proprietary Python signal scripts into a standardized strategy evaluation class.
+Task 2.2: Build the backtest loop executing entries strictly at the 09:45 AM bar mark while validating exits against 15-minute granular bars.
+Task 2.3: Add the time-series Purged Cross-Validation framework and the Zerodha friction model (comprising brokerage + STT + GST + exchange transaction taxes).
+Task 2.4: Build the Streamlit dashboard containing parameter tuning sliders, equity curve plotting via Plotly, and maximum drawdown tables.
+Acceptance Criteria: Changing parameters via the Streamlit UI updates the backtest output metrics and graph dynamically. The logs must verify that no trade entry occurs at market open prices ().
+Module 3: State Machine & Execution Engine
+Task 3.1: Write the database schema for tracking live open trades, capital allocation balances, and active trailing stop-loss values across days.
+Task 3.2: Build the 09:45 AM live execution loop: calculate synthetic candles, run signal scripts, check allocation availability, and generate orders.
+Task 3.3: Build the Asset Rotation module: execute logic to evaluate and swap an underperforming open asset for a superior newly discovered signal.
+Task 3.4: Build the 03:25 PM position management loop: check tracking variables, calculate trailing stop-loss increments using ATR, and update Zerodha's order books via kite.modify_order().
+Acceptance Criteria: Simulate the execution state machine using mock API hooks. Assert that under no condition can a 4th concurrent trade be placed or an order exceed the 30% capital threshold.
+Module 4: Cloud Deployment & Operational Defenses
+Task 4.1: Package the execution script into a Docker container and upload it to AWS Lambda / Google Cloud Functions.
+Task 4.2: Configure AWS VPC routing with a NAT Gateway and an Elastic IP to ensure all traffic hitting Zerodha utilizes a single, whitelisted static IP address. Configure EventBridge schedules for 09:45 AM and 03:25 PM IST triggers.
+Task 4.3: Build the 08:30 AM authentication handler. This micro-service pings your Telegram app with an authentication link; clicking it captures the redirect token and updates the production environment's live access_token.
+Task 4.4: Write defensive exception handlers. Wrap all API requests in try-except blocks catching margin errors, order rejections, and network timeouts, routing failures directly to your Telegram notification code.
+Acceptance Criteria: Triggering the live Lambda function manually successfully reads the active state table, evaluates live market data, and dispatches a clean performance summary message to your Telegram account.
+7. System Panic & Safety Interventions
+Autonomous Master Kill-Switch
+To protect capital if cloud states drop completely out of alignment with the actual broker order book (e.g., database connection timeouts midway through order placement routines), the Telegram Bot interface must expose an immutable /panic endpoint.
+Upon receiving the /panic command payload, the application must immediately bypass standard execution modules and prioritize this routine sequentially:
+Purge Orders: Query kite.orders() and issue bulk cancellation requests for all pending GTT, Target Limit, and Stop-Loss Limit orders.
+Flatten Inventory: Query kite.positions(), identify all open CNC equity holdings executed under the strategy framework, and convert them to immediate market-facing exit orders with aggressive limit padding to enforce a 100% cash position.
+Freeze Engine: Hard-write a SYSTEM_LOCKED = True state boolean to the persistent cloud database, stripping AWS Lambda of its permission to process morning signals until a human operator conducts a structural post-mortem and manually resets the system flag.
+Automated API Fail-Safe (The Master Circuit Breaker
+Since your system operates headlessly inside AWS Lambda, create an explicit Emergency Kill-Switch Routine handled via your local computer or Telegram Bot API interface:
+[Telegram / Local UI Command] ---> [Triggers Lambda: Global_Kill_Switch()]
+                                               |
+                                               v
+                             +-----------------------------------+
+                             | Cancel All Pending Target/SL      |
+                             | Orders via Kite Bulk API          |
+                             +-----------------------------------+
+                                               |
+                                               v
+                             +-----------------------------------+
+                             | Fetch Positions -> Convert Open   |
+                             | CNC Holdings to Market Exits      |
+                             +-----------------------------------+
+                                               |
+                                               v
+                             +-----------------------------------+
+                             | Reset Cloud DB Open Positions = 0 |
+                             +-----------------------------------+
+If your Python code encounters an unexpected index boundary error or loops indefinitely during asset rotation while you are away from your workstation, a single inbound text message string (e.g., /kill_all) must immediately trigger a routine that cleanly flattens your ledger to cash.

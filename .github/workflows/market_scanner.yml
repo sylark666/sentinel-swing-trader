@@ -1,0 +1,39 @@
+name: Sentinel-Swing Daily Market Scanner
+
+on:
+  schedule:
+    # 09:25 AM IST (03:55 UTC) Mon-Fri
+    - cron: '55 3 * * 1-5'
+    # 01:18 PM IST (07:48 UTC) Mon-Fri
+    - cron: '48 7 * * 1-5'
+    # 03:32 PM IST (10:02 UTC) Mon-Fri
+    - cron: '02 10 * * 1-5'
+  workflow_dispatch:
+
+jobs:
+  scan_market:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: 'pip'
+
+      - name: Install Dependencies
+        run: |
+          pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Run Market Checkpoint Scan
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          GMAIL_SENDER: ${{ secrets.GMAIL_SENDER }}
+          GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
+          GMAIL_RECIPIENT: ${{ secrets.GMAIL_RECIPIENT }}
+        run: |
+          python live_market_service.py --now

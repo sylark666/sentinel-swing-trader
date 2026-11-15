@@ -1,0 +1,20 @@
+# Environment & Secrets
+.env
+alert_config.json
+.streamlit/secrets.toml
+
+# Heavy Database & Caches (GitHub blocks files > 100MB)
+market_data.db
+portfolio_tracker.db
+market_data_cache/
+*.log
+
+# Python artifacts
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+
+# Large temporary exports (Keep nifty500_symbols.csv)
+*.csv
+!nifty500_symbols.csv
