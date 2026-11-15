@@ -192,25 +192,43 @@ def execute_checkpoint_scan(checkpoint_name: str = "Mid-Day"):
     # Sort descending by Alpha Score
     candidates.sort(key=lambda x: x['alpha_score'], reverse=True)
 
-    # Pick top candidate to fill available slot
-    available_slots = int(summary['effective_slots_available'])
-    for cand in candidates[:available_slots]:
-        sug_alloc = summary['slot_target_allocation']
-        sug_qty = int(sug_alloc // cand['price'])
-        if sug_qty <= 0:
-            continue
+    # Filter high-conviction options (Alpha >= 110.0, or top candidates)
+    high_alpha_options = [c for c in candidates if c['alpha_score'] >= 110.0]
+    display_candidates = high_alpha_options if high_alpha_options else candidates[:3]
 
-        logger.info(f"Dispatching Buy Alert: {cand['ticker']} (Alpha {cand['alpha_score']})")
-        notif.dispatch_buy_alert(
-            ticker=cand['ticker'],
-            signal_price=cand['price'],
-            suggested_qty=sug_qty,
-            stop_loss=cand['stop_loss'],
-            alpha_score=cand['alpha_score'],
-            reasons=cand['reasons'],
-            available_cash=summary['cash_available'],
-            suggested_alloc=sug_alloc
+    available_slots = int(summary['effective_slots_available'])
+
+    if display_candidates and available_slots > 0:
+        # Send an introductory advisory dispatch
+        num_options = min(len(display_candidates), 5)
+        intro_msg = (
+            f"🎯 *SCANNER ALERT: {num_options} High-Alpha Setup(s) Detected!*\n"
+            f"━━━━━━━━━━━━━━━━━━━━\n"
+            f"• Available Slots: *{available_slots} open slot(s)*\n"
+            f"• Target Allocation per Slot: *₹{summary['slot_target_allocation']:,.2f}*\n"
+            f"• Available Cash: *₹{summary['cash_available']:,.2f}*\n\n"
+            f"👉 *Review the top options below and choose which one(s) you wish to execute:*"
         )
+        notif.send_telegram_message(intro_msg)
+
+        # Dispatch alert cards for up to top 5 high-conviction options
+        for cand in display_candidates[:5]:
+            sug_alloc = summary['slot_target_allocation']
+            sug_qty = int(sug_alloc // cand['price'])
+            if sug_qty <= 0:
+                continue
+
+            logger.info(f"Dispatching Multi-Choice Option: {cand['ticker']} (Alpha {cand['alpha_score']})")
+            notif.dispatch_buy_alert(
+                ticker=cand['ticker'],
+                signal_price=cand['price'],
+                suggested_qty=sug_qty,
+                stop_loss=cand['stop_loss'],
+                alpha_score=cand['alpha_score'],
+                reasons=cand['reasons'],
+                available_cash=summary['cash_available'],
+                suggested_alloc=sug_alloc
+            )
 
 
 def run_market_scheduler():
