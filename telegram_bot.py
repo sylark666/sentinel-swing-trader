@@ -547,7 +547,14 @@ def poll_telegram_updates(interval_sec: float = 2.0):
     Long-polling worker to listen for incoming Telegram messages and button clicks.
     Runs continuously or as a background thread.
     """
+    # Wait until token is available (in case secrets are loading)
     token = get_bot_token()
+    retries = 0
+    while not token and retries < 15:
+        time.sleep(2)
+        token = get_bot_token()
+        retries += 1
+
     if not token:
         logger.error("No Telegram token configured. Cannot start polling.")
         return
@@ -557,14 +564,17 @@ def poll_telegram_updates(interval_sec: float = 2.0):
 
     while True:
         try:
-            url = f"https://api.telegram.org/bot{token}/getUpdates?offset={offset}&timeout=10"
+            url = f"https://api.telegram.org/bot{token}/getUpdates?offset={offset}&timeout=5"
             req = request.Request(url)
-            with request.urlopen(req, timeout=15) as resp:
+            with request.urlopen(req, timeout=10) as resp:
                 data = json.loads(resp.read().decode("utf-8"))
 
             for update in data.get("result", []):
                 offset = update["update_id"] + 1
-                process_telegram_update(update)
+                try:
+                    process_telegram_update(update)
+                except Exception as ex:
+                    logger.error(f"Error processing telegram update: {ex}")
 
         except Exception as e:
             logger.debug(f"Polling loop: {e}")

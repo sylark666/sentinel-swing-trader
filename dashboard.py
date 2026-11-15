@@ -27,6 +27,22 @@ from signal_engine import calculate_indicators
 
 logging.basicConfig(level=logging.INFO)
 
+# Background Telegram Bot listener daemon (runs once across sessions)
+import threading
+@st.cache_resource
+def start_telegram_daemon():
+    try:
+        import telegram_bot
+        t = threading.Thread(target=telegram_bot.poll_telegram_updates, daemon=True, name="TelegramBotDaemon")
+        t.start()
+        logging.info("Telegram Bot daemon started successfully in background.")
+        return True
+    except Exception as e:
+        logging.warning(f"Could not start Telegram Bot daemon: {e}")
+        return False
+
+start_telegram_daemon()
+
 def load_data_source(symbol: str, timeframe: str, source: str, period: str = "730d"):
     """Loads candlestick data seamlessly from TradingView Local DB or yfinance."""
     if source == "TradingView (Local DB)":

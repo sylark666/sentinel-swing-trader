@@ -25,24 +25,45 @@ CONFIG_FILE = "alert_config.json"
 
 
 def load_config() -> Dict:
-    """Loads notification credentials from config.json or environment."""
+    """Loads notification credentials from config.json, environment, or Streamlit secrets."""
     config = {
-        "telegram_token": os.getenv("TELEGRAM_BOT_TOKEN", ""),
+        "telegram_token": os.getenv("TELEGRAM_BOT_TOKEN", "") or os.getenv("TELEGRAM_TOKEN", ""),
         "telegram_chat_id": os.getenv("TELEGRAM_CHAT_ID", ""),
         "gmail_sender": os.getenv("GMAIL_SENDER", ""),
         "gmail_app_password": os.getenv("GMAIL_APP_PASSWORD", ""),
-        "gmail_receiver": os.getenv("GMAIL_RECEIVER", "")
+        "gmail_receiver": os.getenv("GMAIL_RECIPIENT", "") or os.getenv("GMAIL_RECEIVER", "")
     }
 
     # If Streamlit secrets available
     try:
         import streamlit as st
         if hasattr(st, "secrets"):
-            for k in config.keys():
-                if k.upper() in st.secrets:
-                    config[k] = st.secrets[k.upper()]
-                elif k in st.secrets:
-                    config[k] = st.secrets[k]
+            # Check Telegram keys
+            for k in ["TELEGRAM_BOT_TOKEN", "TELEGRAM_TOKEN", "telegram_bot_token", "telegram_token"]:
+                if k in st.secrets:
+                    config["telegram_token"] = str(st.secrets[k]).strip()
+                    break
+
+            for k in ["TELEGRAM_CHAT_ID", "telegram_chat_id"]:
+                if k in st.secrets:
+                    config["telegram_chat_id"] = str(st.secrets[k]).strip()
+                    break
+
+            # Check Gmail keys
+            for k in ["GMAIL_SENDER", "gmail_sender"]:
+                if k in st.secrets:
+                    config["gmail_sender"] = str(st.secrets[k]).strip()
+                    break
+
+            for k in ["GMAIL_APP_PASSWORD", "gmail_app_password"]:
+                if k in st.secrets:
+                    config["gmail_app_password"] = str(st.secrets[k]).strip()
+                    break
+
+            for k in ["GMAIL_RECIPIENT", "GMAIL_RECEIVER", "gmail_recipient", "gmail_receiver"]:
+                if k in st.secrets:
+                    config["gmail_receiver"] = str(st.secrets[k]).strip()
+                    break
     except Exception:
         pass
 
