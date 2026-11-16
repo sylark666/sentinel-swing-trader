@@ -2,6 +2,11 @@
 .env
 alert_config.json
 .streamlit/secrets.toml
+Imp details.txt
+*details*.txt
+*password*.txt
+*secret*.txt
+*token*.txt
 
 # Heavy Database & Caches (GitHub blocks files > 100MB)
 market_data.db
