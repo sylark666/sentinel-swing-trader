@@ -323,7 +323,7 @@ def dispatch_exit_alert(
     return tg_ok, mail_ok
 
 
-def dispatch_daily_summary(summary: Dict, active_holdings: List[Dict], csv_attachment: Optional[str] = None) -> Tuple[bool, bool]:
+def dispatch_daily_summary(summary: Dict, active_holdings: List[Dict], csv_attachment: Optional[str] = None, send_email: bool = False) -> Tuple[bool, bool]:
     """Dispatches the market close (03:45 PM IST) portfolio health summary."""
     holdings_lines = []
     if active_holdings:
@@ -352,24 +352,26 @@ def dispatch_daily_summary(summary: Dict, active_holdings: List[Dict], csv_attac
     if csv_attachment and os.path.exists(csv_attachment):
         send_telegram_document(csv_attachment, caption="📁 Closed Trades Ledger (CSV)")
 
-    # Email summary
-    html = f"""
-    <html>
-    <body style="font-family: Arial, sans-serif; background-color: #0f141c; color: #ffffff; padding: 20px;">
-        <div style="max-width: 600px; margin: auto; background-color: #1a2232; border-radius: 8px; border-left: 6px solid #4da6ff; padding: 20px;">
-            <h2 style="color: #4da6ff; margin-top: 0;">📊 Daily Portfolio Health Summary</h2>
-            <p style="font-size: 14px; color: #a0aec0;">End-of-day checkpoint audit.</p>
-            <table style="width: 100%; border-collapse: collapse; margin: 15px 0; font-size: 14px;">
-                <tr style="border-bottom: 1px solid #2d3748;"><td style="padding: 8px; color: #a0aec0;">Total Equity</td><td style="padding: 8px; font-weight: bold;">₹{summary['total_capital']:,.2f}</td></tr>
-                <tr style="border-bottom: 1px solid #2d3748;"><td style="padding: 8px; color: #a0aec0;">Available Cash</td><td style="padding: 8px; font-weight: bold; color: #00ff88;">₹{summary['cash_available']:,.2f} ({summary['cash_pct']:.1f}%)</td></tr>
-                <tr style="border-bottom: 1px solid #2d3748;"><td style="padding: 8px; color: #a0aec0;">Slots Utilized</td><td style="padding: 8px;">{summary['effective_slots_occupied']:.1f} / 3.0 Slots</td></tr>
-                <tr style="border-bottom: 1px solid #2d3748;"><td style="padding: 8px; color: #a0aec0;">Long-Term Vault</td><td style="padding: 8px;">{summary['vault_stocks_count']} stocks ({summary['vault_total_qty']} shares)</td></tr>
-            </table>
-        </div>
-    </body>
-    </html>
-    """
-    mail_ok = send_gmail_alert("📊 Auto Swing Trader: Daily Close Summary", html, attachment_path=csv_attachment)
+    # Email summary ONLY if explicitly requested (User Rule: Email ONLY if action needed)
+    mail_ok = False
+    if send_email:
+        html = f"""
+        <html>
+        <body style="font-family: Arial, sans-serif; background-color: #0f141c; color: #ffffff; padding: 20px;">
+            <div style="max-width: 600px; margin: auto; background-color: #1a2232; border-radius: 8px; border-left: 6px solid #4da6ff; padding: 20px;">
+                <h2 style="color: #4da6ff; margin-top: 0;">📊 Daily Portfolio Health Summary</h2>
+                <p style="font-size: 14px; color: #a0aec0;">End-of-day checkpoint audit.</p>
+                <table style="width: 100%; border-collapse: collapse; margin: 15px 0; font-size: 14px;">
+                    <tr style="border-bottom: 1px solid #2d3748;"><td style="padding: 8px; color: #a0aec0;">Total Equity</td><td style="padding: 8px; font-weight: bold;">₹{summary['total_capital']:,.2f}</td></tr>
+                    <tr style="border-bottom: 1px solid #2d3748;"><td style="padding: 8px; color: #a0aec0;">Available Cash</td><td style="padding: 8px; font-weight: bold; color: #00ff88;">₹{summary['cash_available']:,.2f} ({summary['cash_pct']:.1f}%)</td></tr>
+                    <tr style="border-bottom: 1px solid #2d3748;"><td style="padding: 8px; color: #a0aec0;">Slots Utilized</td><td style="padding: 8px;">{summary['effective_slots_occupied']:.1f} / 3.0 Slots</td></tr>
+                    <tr style="border-bottom: 1px solid #2d3748;"><td style="padding: 8px; color: #a0aec0;">Long-Term Vault</td><td style="padding: 8px;">{summary['vault_stocks_count']} stocks ({summary['vault_total_qty']} shares)</td></tr>
+                </table>
+            </div>
+        </body>
+        </html>
+        """
+        mail_ok = send_gmail_alert("📊 Auto Swing Trader: Daily Close Summary", html, attachment_path=csv_attachment)
 
     return tg_ok, mail_ok
 

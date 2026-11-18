@@ -10,8 +10,11 @@ Imp details.txt
 
 # Heavy Database & Caches (GitHub blocks files > 100MB)
 market_data.db
+etf_market_data.db
+origin_portfolio.db
 market_data_cache/
 *.log
+*.pkl
 
 # Python artifacts
 __pycache__/

@@ -1,0 +1,407 @@
+
+Master Market Regime Matrix
+
+
+#	Market Regime	Benchmark Price Action	Volatility & Breadth	Best Swing Strategies to Deploy	Position Sizing Rule
+1	Strong Bull Expansion	Above rising 20, 50, & 200 SMA	Low/falling VIX; >70% stocks >50 SMA	Breakouts (VCP, Darvas Box, PEAD)	Full size (1.0%–1.5% risk)
+2	Healthy Uptrend Pullback	Between 20 EMA & 50 SMA	Moderate VIX; 50%–70% stocks >50 SMA	Pullbacks (20-EMA, AVWAP, RS Leaders)	Standard size (0.75%–1.0% risk)
+3	Sideways Range / Chop	Flat 50 SMA; price whipsawing	Stable VIX; 40%–60% stocks >50 SMA	Mean Reversion (RSI(2), Failed Breakdown)	Half size (0.5% risk); quick targets
+4	Distribution / Topping	Breaking 50 SMA; lower highs	Rising VIX; breadth diverging lower	Defensive / Short Pullbacks; tighten stops	Quarter size (0.25%–0.5% risk)
+5	High-Volatility Bear / Panic	Below falling 50 & 200 SMA	Spiking VIX; <25% stocks >50 SMA	Cash / Extreme Mean Reversion only	Mostly cash; avoid long breakouts
+
+
+5 Concrete Strategies to Identify the Market Regime
+
+
+1. The Moving Average Stack & Slope Filter
+
+This rule-based method classifies trend direction and momentum using three benchmark moving averages on the daily index chart.
+• Bullish Stack: Index price > 20-day EMA > 50-day SMA > 200-day SMA, with all three lines sloping upward.
+• Choppy / Transitional Stack: Price crosses back and forth over a flat 50-day SMA while remaining above a rising 200-day SMA.
+• Bearish Stack: Index price < 20-day EMA < 50-day SMA < 200-day SMA, with all three lines sloping downward.
+
+2. Market Breadth Check (Percentage of Stocks Above 50-SMA)
+
+Index prices can be skewed by a few mega-cap stocks. Breadth measures whether the average stock is actually participating.
+• Healthy Participation (>65% above 50-SMA): Broad rally; breakout and trend-following setups have high follow-through.
+• Neutral / Selective (40% to 65% above 50-SMA): Sector rotation market; stick strictly to top relative-strength leaders.
+• Oversold Washout (<20% above 50-SMA): Selling is exhausted; watch for sharp short-term mean-reversion bounces rather than new shorts.
+
+3. Volatility Regime Filter (India VIX / CBOE VIX)
+
+Volatility tells you whether breakouts will hold or fail due to wide daily swings.
+• Low & Calm Volatility (VIX < 15): Institutional accumulation regime; tight stop-losses hold well and breakouts follow through cleanly.
+• Elevated Volatility (VIX 15 to 22): Wide intraday swings; widen your stop-losses using ATR and favor pullback entries over breakouts.
+• Panic Volatility (VIX > 22–25): Overnight gap risk spikes; breakouts frequently fail and reverse, favoring cash or quick mean-reversion trades.
+
+4. Institutional Accumulation vs. Distribution Day Count
+
+Popularized by William O'Neil, this method tracks institutional buying and selling directly on the benchmark index over a rolling 25-trading-day window.
+• Distribution Day: The index closes down 0.2% or more on higher volume than the previous session.
+• Accumulation Day: The index closes up 0.2% or more on higher volume than the previous session.
+• Regime Signal: 0 to 2 distribution days signals a healthy bull market. Once the index accumulates 5 or more distribution days within 25 sessions, the market has shifted into a topping or correction regime.
+
+5. ADX(14) Trend vs. Range Detector
+
+The Average Directional Index (ADX) measures trend strength regardless of direction, preventing you from using breakout systems in dead markets.
+• ADX Below 20: Trendless, sideways market. Breakouts will repeatedly fail; switch exclusively to RSI(2) and support/resistance bounce setups.
+• ADX Rising Above 25: Strong directional trend is underway. Switch to 20-EMA pullbacks, VCP breakouts, and trailing stops.
+
+5 Real-World Market Scenarios & Exact Action Plans
+
+
+Scenario 1: The "Easy Money" Breakout Bull
+
+• What You See: Benchmark index is hitting new highs above a rising 20-EMA, VIX is under 14, distribution days are 2 or fewer, and over 70% of stocks trade above their 50-SMA.
+• What Happens: Breakouts surge immediately and hold gains for weeks; pullbacks barely touch the 10-EMA.
+• Action Plan: Deploy VCP Breakouts, Darvas Boxes, and PEAD Flags at full position size. Avoid waiting for deep pullbacks because strong stocks will leave you behind.
+
+Scenario 2: The Healthy Bull Pullback
+
+• What You See: The index drops 3% to 6% over 5 to 10 days into its rising 20-EMA or 50-SMA on declining volume while staying well above the 200-SMA.
+• What Happens: Weak stocks break down, while true market leaders hold sideways or make higher lows.
+• Action Plan: Stop buying breakouts temporarily. Build a watchlist using Relative Strength Leader Rotation and enter on 20-EMA Holy Grail or Anchored VWAP bounces the day the index prints a green reversal candle.
+
+Scenario 3: The Frustrating Sideways Chop (Whipsaw Market)
+
+• What You See: The index is trapped between clear horizontal support and resistance for weeks, the 50-SMA is flat, and ADX(14) is below 20.
+• What Happens: Every breakout gets sold the next day, and every breakdown bounces back into the range.
+• Action Plan: Cut position sizes in half. Switch completely to RSI(2) Panic Dips and Failed Breakdown Springs, taking profits quickly at range resistance instead of holding for big trends.
+
+Scenario 4: Stealth Distribution (Index Highs, Weak Breadth)
+
+• What You See: The headline index is flat or slightly higher, but fewer than 40% of stocks are above their 50-SMA and 5+ distribution days have stacked up in a month.
+• What Happens: Mid-cap and small-cap breakouts fail violently even though the main index looks fine on the surface.
+• Action Plan: Tighten trailing stops on all open swing trades, stop opening new breakout positions, and raise cash until breadth recovers.
+
+Scenario 5: Capitulation Washout & Bottom Reversal
+
+• What You See: The index has fallen sharply below its 50-SMA and 200-SMA, VIX spikes above 25, and fewer than 15% of stocks are above their 50-SMA.
+• What Happens: Panic selling reaches exhaustion, setting up a violent multi-day relief rally.
+• Action Plan: Stay mostly in cash during the drop. Once the index prints a Follow-Through Day (a 1.5%+ index gain on higher volume occurring 4 to 7 days after a swing low), deploy small-size RSI(2) or Failed Breakdown trades with strict stops.
+
+
+----------------------------------------------
+
+
+NSE/BSE Market Regime Dashboard (Daily Check)
+
+Before scanning stocks, check these four Indian market indicators at 3:30 PM IST:
+• Benchmark Index: Nifty 50 (large-cap trend) & Nifty Midcap 150 / Smallcap 250 (broader appetite).
+• Volatility Gauge: India VIX (<13 = calm bull; 13–18 = normal; >20 = high gap risk).
+• Market Breadth: % of Nifty 500 stocks trading above their 50-day SMA.
+• Institutional Flow: FII/DII Net Cash Data + Nifty 50 distribution day count (days down >0.2% on higher volume over the last 25 sessions).
+
+Regime 1: Strong Bull Expansion (Nifty > Rising 20/50/200 SMA, India VIX < 13)
+
+• Market Behavior: Broad-based rally across Nifty 50, Midcaps, and Smallcaps; >70% of Nifty 500 stocks above 50-SMA; strong DII/FII inflows.
+• Cash vs. F&O Focus: Ideal for high-beta NSE Cash stocks (Midcap/Smallcap leaders without F&O drag) and F&O momentum leaders.
+• Position Sizing: Full risk (1.0% to 1.5% of capital per trade).
+
+1A. VCP (Volatility Contraction Pattern) Breakout
+
+• Scan (NSE Cash/F&O): Stocks trading above rising 50- and 200-SMA, within 15% of 52-week highs, with 20-day average turnover > ₹20 Crore (to avoid illiquid traps).
+• Trigger: 2 to 4 successive pullbacks where each contraction gets tighter (e.g., -15%, -7%, -3%) and daily volume dries up below 50% of its 50-day average.
+• Entry: Buy as price crosses the tight pivot high with intraday volume pacing >150% of average.
+• Stop-Loss: Below the low of the final contraction (typically 3%–6%).
+• Exit: Book 50% profit at 2.5R, and trail the rest using a daily close below the 10-day EMA.
+
+1B. Earnings Gap-Up Flag (PEAD)
+
+• Scan: NSE stocks gapping up 7%+ on 3x+ average volume following strong quarterly results.
+• Trigger: Wait 3 to 10 sessions for price to form a tight, low-volume flag holding above the midpoint of the result-day candle.
+• Entry: Buy on a breakout above the upper flag trendline.
+• Stop-Loss: Just below the flag low.
+• Exit: Target a measured move equal to the result-day rally, or exit on a daily close below the 10-day EMA.
+
+Regime 2: Healthy Uptrend Pullback (Nifty Dipping to 20-EMA / 50-SMA, India VIX 13–17)
+
+• Market Behavior: Nifty pulls back 3%–6% after a strong run; 50%–70% of Nifty 500 stocks remain above their 50-SMA.
+• Cash vs. F&O Focus: Focus on Nifty 200 / F&O liquid stocks and sector leaders that resist falling while the Nifty dips.
+• Position Sizing: Standard risk (0.75% to 1.0% per trade).
+
+2A. The 20-EMA Holy Grail Pullback
+
+• Scan: Liquid NSE stocks with a rising 50-SMA and ADX(14) > 30.
+• Trigger: Price pulls back gently to touch the 20-day EMA on declining volume.
+• Entry: Place a buy-stop order 1 tick above the high of the candle touching the 20-EMA.
+• Stop-Loss: Below the pullback swing low.
+• Exit: Book half near the prior swing high, and trail the balance below the 20-day EMA.
+
+2B. Relative Strength (RS) Sector Leader Bounce
+
+• Scan: While Nifty 50 makes lower lows over 4–8 days, filter for NSE stocks making higher lows or holding near highs (often in outperforming themes like PSU Banks, Auto, Capital Goods, or Pharma).
+• Trigger: Wait for Nifty 50 to print a green reversal candle or reclaim its 10-day EMA.
+• Entry: Buy the RS leader as it breaks above its multi-day consolidation high on that exact Nifty bounce day.
+• Stop-Loss: Below the stock's recent pullback swing low.
+• Exit: Trail stops with the 10-day or 20-day EMA as long as the stock outperforms Nifty.
+
+Regime 3: Sideways Range / Chop (Flat 50-SMA, ADX < 20, India VIX 12–16)
+
+• Market Behavior: Nifty 50 oscillates inside a 400–600 point range; breakouts in Midcaps/Smallcaps fail the next morning.
+• Cash vs. F&O Focus: Stick strictly to Nifty 100 / F&O stocks and NiftyBees / BankBees ETFs where liquidity is deep and circuit-limit shocks are rare.
+• Position Sizing: Half risk (0.5% per trade) with fixed targets—do not overstay trades.
+
+3A. RSI(2) Mean-Reversion Dip Buy
+
+• Scan: Nifty 100 stocks or NiftyBees / BankBees trading strictly above their 200-day SMA.
+• Trigger: 2 to 3 consecutive red days push the 2-period RSI below 10.
+• Entry: Buy between 3:15 PM and 3:28 PM IST on the day RSI(2) closes below 10.
+• Stop-Loss: Wide volatility stop at 2x the 14-day ATR below entry.
+• Exit: Exit 100% at the close on the first day price finishes back above its 5-day SMA (usually 2–4 days).
+
+3B. Failed Breakdown (Bear Trap Spring)
+
+• Scan: Range-bound Nifty 200 stocks with a clear support floor tested at least twice over 1 to 3 months.
+• Trigger: Price breaks below support intraday or for one day, trapping short-sellers, then closes back above support on strong volume.
+• Entry: Buy at the close of the reclaim day or above that candle's high.
+• Stop-Loss: 1 tick below the lowest wick of the false breakdown.
+• Exit: Sell near the top of the range (resistance) for a clean 2R–3R swing.
+
+Regime 4: Distribution / Topping (Nifty < 50-SMA, 5+ Distribution Days, India VIX 17–22)
+
+• Market Behavior: Heavy FII selling; Nifty breaks below its 50-SMA; fewer than 40% of Nifty 500 stocks remain above their 50-SMA; Midcaps/Smallcaps suffer sharp 10%–20% cuts.
+• Cash vs. F&O Focus: Avoid non-F&O Smallcaps completely (due to lower-circuit lock risk). Use F&O stocks for short setups or defensive Pharma/FMCG/IT cash stocks for selective longs.
+• Position Sizing: Quarter to half risk (0.25% to 0.5% per trade).
+
+4A. Rising Bear Flag Breakdown (F&O Short Setup)
+
+• Note: Because SEBI prohibits overnight shorting in the cash segment, execute this using Stock Futures or Bear Put Spreads (to cap overnight gap risk).
+• Scan: Weak F&O stocks trading below falling 20-day and 50-day SMAs after a high-volume breakdown.
+• Trigger: Price bounces weakly over 3 to 6 sessions on low volume into the underside of the 20-day EMA.
+• Entry: Enter short when price breaks below the lower trendline of the bear flag.
+• Stop-Loss: Just above the bear flag high.
+• Exit: Cover 50% at the prior swing low, and trail the rest using the 10-day EMA.
+
+4B. Defensive Pocket Pullback (FMCG / Pharma / Healthcare)
+
+• Scan: When cyclicals fall, scan defensive NSE sectors (such as Nifty Pharma or Nifty FMCG constituents) holding above their rising 50-day SMA.
+• Trigger: Price pulls back to its 50-day SMA or Anchored VWAP and forms a bullish hammer or engulfing candle.
+• Entry: Buy above the reversal candle high at half size.
+• Stop-Loss: Below the 50-day SMA and candle low.
+• Exit: Take quick 1.5R to 2R profits before broader market weakness drags defensives down.
+
+Regime 5: High-Volatility Bear / Panic Washout (Nifty < 50 & 200 SMA, India VIX > 22)
+
+• Market Behavior: Sharp selloff across all indices; <15% of Nifty 500 stocks above 50-SMA; severe overnight gaps driven by global or macro shocks.
+• Cash vs. F&O Focus: Stay 80%–100% in cash / LiquidBees during the fall. Only deploy capital in Nifty 50 heavyweights or NiftyBees after capitulation signals appear.
+• Position Sizing: Quarter risk (0.25% to 0.5% per trade).
+
+5A. Capitulation Gap Reversal (Oversold Snapback)
+
+• Scan: Nifty 50 blue-chips or NiftyBees down 10%+ in under 5 sessions with RSI(14) below 25 and India VIX spiking above 25.
+• Trigger: Stock opens with a large gap down on panic volume, then reverses intraday to close in the top 25% of its daily range.
+• Entry: Buy near 3:20 PM IST on the reversal day at quarter to half size.
+• Stop-Loss: 1 tick below the panic intraday low.
+• Exit: Sell into the 3- to 5-day relief rally as price reaches the falling 10-day or 20-day EMA.
+
+5B. Follow-Through Day (FTD) Early Leader Entry
+
+• Scan: Build a watchlist of NSE stocks that refused to break their 200-day SMA during the bear decline.
+• Trigger: Wait for Nifty 50 to record a Follow-Through Day (a 1.5%+ index gain on higher volume occurring 4 to 7 sessions after a major swing low).
+• Entry: Buy the strongest resilient stock breaking out of a double-bottom or cup base on that exact FTD session.
+• Stop-Loss: Below the FTD session low or base pivot low.
+• Exit: Trail stops tightly below the 10-day EMA, as bear market rallies can fail suddenly.
+
+NSE/BSE-Specific Risk & Cost Rules
+
+• Circuit Filter Trap: Avoid buying stocks sitting in 5% or 2% ASM/GSM circuit bands, as a regime shift can lock you in back-to-back lower circuits where stop-loss orders will not execute.
+• Statutory Charges & STT: Indian equity delivery trades carry 0.1% Securities Transaction Tax (STT) on both buy and sell sides, plus exchange fees, stamp duty, and GST (~0.22%–0.25% round-trip cost), which reduces net edge on ultra-short setups like RSI(2) unless you factor costs into your expectancy.
+• F&O Lot-Size Constraints: In Regime 4 short setups, fixed F&O lot sizes (typically ₹5–10 Lakh contract value) may exceed a small account's 0.5% risk cap; in those cases, use defined-risk Bear Put Spreads or stay in cash.
+
+
+-----------------------------------------------
+
+
+1. Order Block + Fair Value Gap (FVG) Liquidity Sweep (ICT / Smart Money)
+
+Modern institutional algorithms rarely buy breakouts; they engineer stop-hunts below obvious retail support before driving price higher.
+• Market Regime Fit: Best in Regimes 1, 2, and 3 (Bull Pullbacks and Range Markets).
+• Scan: Liquid Nifty 200 / F&O stocks in an uptrend above their rising 50-day SMA.
+• Trigger:
+	1. Price sweeps just below a clear prior swing low (taking out retail stop-losses).
+	2. Price immediately reverses sharply upward on high volume, leaving a 3-candle Fair Value Gap (FVG) (an empty price imbalance between Candle 1's high and Candle 3's low).
+• Entry: Place a limit buy order at the 50% midpoint (Consequent Encroachment) of the Fair Value Gap when price pulls back to fill the imbalance 1 to 4 days later.
+• Stop-Loss: 1 tick below the liquidity sweep wick low.
+• Exit: Target the opposing buy-side liquidity pool (prior swing high) for a clean 3R to 5R asymmetric payoff.
+
+2. High-Volume Node (HVN) Volume Profile Reclaim
+
+Instead of horizontal lines, proprietary desks map where the highest share volume actually traded over a 30-to-60-day range using Visible Range Volume Profile (VRVP).
+• Market Regime Fit: Best in Regimes 1 and 2.
+• Scan: NSE stocks consolidating for 15 to 40 days after an impulse rally.
+• Trigger: Identify the Point of Control (POC)—the exact price level with the highest traded volume in that base. Watch for price to dip briefly into a Low-Volume Node (LVN) below the POC, find zero selling follow-through, and reclaim the POC on strong volume.
+• Entry: Buy on the daily close back above the POC (or on a break of the reclaim candle's high).
+• Stop-Loss: Just below the Low-Volume Node swing low.
+• Exit: Trail stops under each newly formed weekly POC as the stock trends higher.
+
+3. F&O Short-Covering & Open Interest (OI) Squeeze
+
+Because NSE publishes granular Futures & Options Open Interest data, you can spot trapped short-sellers forced to cover before expiry.
+• Market Regime Fit: Best in Regimes 1, 2, and 3 (specifically in the 2nd and 3rd weeks of a monthly F&O series).
+• Scan: NSE F&O stocks trading near a multi-week resistance breakout where Futures OI has built up by >15% over the prior 10 days while price moved sideways or slightly down (indicating aggressive short buildup).
+• Trigger: Price breaks above the multi-week resistance level while Futures OI begins dropping sharply alongside rising price (confirming short-covering).
+• Entry: Buy the cash stock (or bull call spread) as price holds above the breakout level after 2:30 PM IST (when intraday short-covering accelerates).
+• Stop-Loss: Below the low of the short-covering breakout candle.
+• Exit: Book profits into the 3- to 6-day squeeze before monthly expiry week theta decay sets in.
+
+4. anchored VWAP "Pinch" Compression Breakout
+
+This proprietary-style setup tracks the tug-of-war between buyers from a major swing low and sellers trapped at a major swing high.
+• Market Regime Fit: Best in Regimes 1 and 2.
+• Scan: Nifty 500 stocks that experienced a sharp high-volume selloff followed by a V-shaped recovery.
+• Trigger:
+	1. Anchor AVWAP #1 to the exact swing high where the selloff began.
+	2. Anchor AVWAP #2 to the exact swing low where the recovery started.
+	3. Wait for price to get squeezed into the narrow triangle ("pinch") where both AVWAP lines converge within 1%–2% of each other.
+• Entry: Buy when a daily candle closes decisively above both converged AVWAPs on >1.5x average volume.
+• Stop-Loss: Just below the lower AVWAP line (the swing-low AVWAP).
+• Exit: Sell half at 2.5R, and trail the rest using the swing-low AVWAP.
+
+5. Post-Block / Bulk Deal Institutional Footprint Swing
+
+NSE and BSE release daily Bulk and Block Deal disclosures after market close. When mutual funds or marquee domestic funds absorb promoter or PE supply, a multi-week floor is established.
+• Market Regime Fit: Best in Regimes 1, 2, and 4 (defensive pockets).
+• Scan: Check daily NSE/BSE Bulk & Block Deal data after 6:00 PM IST for deals where reputed Domestic Mutual Funds / FPIs buy >0.5% equity on the open market.
+• Trigger: Do not chase the next morning's gap. Mark the exact Block Deal execution price and wait 2 to 7 days for price to pull back and test that deal price on low volume.
+• Entry: Buy when price holds above the Block Deal price and prints a bullish daily reversal bar.
+• Stop-Loss: 3% to 4% below the institutional deal price (if price breaks well below their entry, the thesis is invalidated).
+• Exit: Hold for a 2- to 4-week institutional markup, trailing stops with the 20-day EMA.
+
+6. Volatility-Normalized ATR Breakout (Chandelier / Keltner Squeeze)
+
+Modern systematic desks avoid fixed percentage stops and targets, normalizing every trade by the stock's own Average True Range (ATR) so high-beta and low-beta stocks carry identical risk.
+• Market Regime Fit: Best in Regimes 1 and 2.
+• Scan: Stocks where 20-day Bollinger Bands squeeze completely inside 20-day Keltner Channels (1.5x ATR)—indicating extreme volatility compression.
+• Trigger: A daily candle closes outside the upper Bollinger Band while TTM Squeeze / Momentum Histogram flips positive and ADX(14) ticks upward from below 20.
+• Entry: Enter at the close of the squeeze-fire day (or 1 tick above its high).
+• Stop-Loss: Set dynamically at 1.5x ATR(14) below your entry price.
+• Exit: Use a Chandelier Exit (trailing stop set at 2.5x ATR(14) below the highest close since entry) to stay in outliers without getting shaken out by normal noise.
+
+How to Turn These Into Your Own Proprietary System
+
+• Codify & Backtest: Combine 1 Market Regime Filter (e.g., Nifty > 50-SMA + India VIX < 16) with 2 uncorrelated triggers (such as Anchored VWAP Pinch + F&O OI Short-Covering) to eliminate subjective chart reading.
+• Execution Discipline & Costs: Modern setups like FVG Limit Entries and AVWAP Pinches improve reward-to-risk ratios, which helps offset Indian equity delivery charges (~0.22%–0.25% round-trip including STT, exchange fees, and GST) and overnight gap risk.
+
+---------------------------------------------------------
+
+Here is a complete Master Swing Trading Playbook bringing 10 distinct, rule-based strategies together in one place. Every setup includes exact rules for scanning, triggering, entering, setting stops, and exiting on daily charts.
+
+Quick-Reference Comparison Table
+
+
+#	Strategy Name	Category	Core Tools	Typical Hold	Best Market Regime
+1	20-EMA Holy Grail	Trend Pullback	20 EMA, 50 SMA, ADX(14)	4–12 days	Strong uptrend
+2	Anchored VWAP Dip	Trend Pullback	Anchored VWAP, Volume	5–15 days	Post-catalyst uptrend
+3	Golden Zone Confluence	Trend Pullback	Fib 50%–61.8%, 50 SMA	5–15 days	Steady trending market
+4	VCP Breakout	Breakout	50/200 SMA, Volume	1–4 weeks	Bullish accumulation
+5	NR7 Squeeze Breakout	Breakout	7-day Range, 20 EMA	2–7 days	Low-volatility coil
+6	Darvas Box / 52W High	Breakout	52-Week High, Volume	2–6 weeks	Strong momentum bull
+7	RSI(2) Panic Dip	Mean Reversion	RSI(2), 200 SMA, 5 SMA	2–5 days	Choppy or bull market
+8	Failed Breakdown Spring	Reversal	Horizontal Support, Volume	3–10 days	Sideways range
+9	PEAD Earnings Flag	Catalyst	Earnings Gap, Flag Pattern	1–3 weeks	Earnings season
+10	Relative Strength Leader	Momentum	Index Comparison, 10 EMA	1–3 weeks	Market bounce from dip
+
+
+Category A: Trend Pullback Playbooks
+
+
+1. The 20-EMA Holy Grail Pullback
+
+This setup buys the first orderly pullback inside a powerful trend.
+• Scan: Filter for stocks where the 50-day SMA is rising and the 14-period ADX is above 30.
+• Trigger: Wait for price to pull back and touch the 20-day EMA on shrinking daily volume.
+• Entry: Place a buy-stop order 1 tick above the high of the candle that touches the 20-EMA.
+• Stop-Loss: Set your stop just below the lowest low of the pullback.
+• Exit: Sell half at the prior swing high, and trail the rest until a daily candle closes below the 20-EMA.
+
+2. Anchored VWAP (AVWAP) Pullback
+
+This setup tracks institutional average cost from a major turning point.
+• Scan: Find stocks that recently broke out on a major news event, earnings release, or swing low reversal.
+• Trigger: Anchor a VWAP line to that exact breakout candle and wait for price to drift back down to touch it.
+• Entry: Buy when a bullish reversal candle (such as a hammer or engulfing bar) closes back above the Anchored VWAP.
+• Stop-Loss: Place your stop below the low of the reversal candle and beneath the AVWAP line.
+• Exit: Target a 2R to 3R reward-to-risk ratio, or exit if price closes below the AVWAP for two consecutive days.
+
+3. Golden Zone Fibonacci Confluence
+
+This setup stacks static Fibonacci support with dynamic moving average support.
+• Scan: Identify a stock that just completed a clean upward impulse leg of at least 15% to 25% above its 200-day SMA.
+• Trigger: Draw Fibonacci retracement levels from the impulse low to high, and check if the 50% to 61.8% zone overlaps with a rising 50-day SMA or prior resistance.
+• Entry: Enter long when price enters the overlap zone and prints a daily candle closing in the top 30% of its range.
+• Stop-Loss: Place your stop just below the 61.8% retracement level and the 50-day SMA.
+• Exit: Take profits near the 0% prior swing high or at the -27.2% Fibonacci extension.
+
+Category B: Breakout & Momentum Playbooks
+
+
+4. Volatility Contraction Pattern (VCP)
+
+This setup catches institutional accumulation right before supply dries up completely.
+• Scan: Look for stocks trading above rising 50-day and 200-day SMAs that have consolidated for 3 to 8 weeks.
+• Trigger: Confirm 2 to 4 successive pullbacks where each drop gets smaller (such as -16%, then -8%, then -3%) and daily volume drops well below average.
+• Entry: Buy as price breaks above the final tight pivot high on intraday volume pacing at least 150% of the 50-day average.
+• Stop-Loss: Place a tight stop just below the low of the final contraction (usually 3% to 6% below entry).
+• Exit: Sell half at 2.5R, and trail the remainder with a close below the 10-day or 20-day EMA.
+
+5. Inside Day NR7 (Narrow Range 7) Squeeze
+
+This setup exploits volatility expansion after a stock compresses into its tightest range of the week.
+• Scan: Filter for uptrending stocks above their 20-day EMA that print an inside day (today's high is lower than yesterday's high, and today's low is higher than yesterday's low).
+• Trigger: Verify that today's high-to-low spread is the narrowest daily range of the last 7 trading days (NR7).
+• Entry: Place a buy-stop order 1 tick above the NR7 candle high for the next session.
+• Stop-Loss: Set your stop 1 tick below the NR7 candle low.
+• Exit: Take profits quickly after a 2- to 5-day momentum expansion or at a 2R target.
+
+6. Darvas Box / 52-Week High Breakout
+
+This setup captures sustained trend continuation when a stock enters blue-sky territory with zero overhead resistance.
+• Scan: Filter for stocks hitting a new 52-week high that then pause sideways for 5 to 15 days.
+• Trigger: Mark the top of the box (the recent peak) and the bottom of the box (where price bounced at least twice without breaking down).
+• Entry: Buy when price closes decisively above the top of the box on above-average volume.
+• Stop-Loss: Place your stop just below the midpoint or bottom of the Darvas box.
+• Exit: Trail your stop upward under each new higher box floor until a box floor breaks.
+
+Category C: Mean-Reversion & Reversal Playbooks
+
+
+7. RSI(2) Overreaction Dip Buy
+
+This quantitative setup buys sharp, short-term panic selling inside healthy long-term uptrends.
+• Scan: Filter for liquid stocks or index ETFs trading strictly above their 200-day SMA.
+• Trigger: Wait for 2 to 3 consecutive red days that push the 2-period RSI below 10.
+• Entry: Buy near the market close on the day the 2-period RSI closes under 10.
+• Stop-Loss: Set a wide volatility stop at 2x the 14-day ATR below your entry price to avoid premature shakeouts.
+• Exit: Exit the entire position at the market close on the first day price closes back above its 5-day SMA.
+
+8. Failed Breakdown (Spring / Bear Trap)
+
+This setup profits when sellers briefly push price below support, trap short-sellers, and immediately reverse higher.
+• Scan: Identify a well-defined horizontal support zone that has held at least twice over the past 1 to 3 months.
+• Trigger: Watch for price to break below support intraday or for one session, then snap back and close above the support level on strong volume.
+• Entry: Enter long on the close of the reclaim candle or on a break above that candle's high.
+• Stop-Loss: Place your stop 1 tick below the lowest wick of the failed breakdown.
+• Exit: Target the top of the trading range (resistance) for a clean 2R to 4R move.
+
+Category D: Catalyst & Relative Strength Playbooks
+
+
+9. Post-Earnings Announcement Drift (PEAD) Flag
+
+This setup rides multi-week institutional buying triggered by a major earnings surprise.
+• Scan: Find stocks that gapped up 8% or more on at least 3x average daily volume following an earnings report.
+• Trigger: Wait 3 to 10 days for price to form a tight, sideways bull flag that holds above the midpoint of the earnings-day candle.
+• Entry: Buy when price breaks above the upper trendline of the flag on expanding volume.
+• Stop-Loss: Place your stop just below the lowest low of the flag.
+• Exit: Target a measured move equal to the height of the initial earnings rally, or exit if price closes below the 10-day EMA.
+
+10. Relative Strength Sector Leader Rotation
+
+This setup pinpoints the strongest stocks during a broader market pullback so you can buy them the moment the index stabilizes.
+• Scan: During a 3% to 7% pullback in the benchmark index (such as the Nifty 50 or S&P 500), scan for stocks making higher lows or holding near their highs while the index drops.
+• Trigger: Wait for the benchmark index to print a confirmed bullish reversal day or reclaim its 10-day EMA.
+• Entry: Buy the relative strength leader as it breaks above its multi-day consolidation high on that same market bounce day.
+• Stop-Loss: Place your stop below the recent pullback swing low of the stock.
+• Exit: Hold while the stock outperforms the index, and trail stops using the 10-day or 20-day EMA.
+

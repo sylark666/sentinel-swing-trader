@@ -43,6 +43,21 @@ def start_telegram_daemon():
 
 start_telegram_daemon()
 
+# Background Live Market Hourly Service daemon (runs once across sessions)
+@st.cache_resource
+def start_market_service_daemon():
+    try:
+        import live_market_service
+        t = threading.Thread(target=live_market_service.run_market_scheduler, daemon=True, name="LiveMarketServiceDaemon")
+        t.start()
+        logging.info("Live Market Service daemon started successfully in background.")
+        return True
+    except Exception as e:
+        logging.warning(f"Could not start Live Market Service daemon: {e}")
+        return False
+
+start_market_service_daemon()
+
 def load_data_source(symbol: str, timeframe: str, source: str, period: str = "730d"):
     """Loads candlestick data seamlessly from TradingView Local DB or yfinance."""
     if source == "TradingView (Local DB)":

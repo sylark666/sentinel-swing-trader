@@ -14,6 +14,8 @@ import os
 import json
 import logging
 import time
+from datetime import datetime
+import pandas as pd
 from urllib import request, parse
 from typing import Dict, Optional
 
@@ -81,24 +83,56 @@ def answer_callback_query(callback_query_id: str, text: str = ""):
 def handle_status_command(chat_id: int):
     active = pm.get_active_trades()
     summary = pm.get_portfolio_summary()
+    now = datetime.now()
 
     if not active:
         send_reply(chat_id, "ℹ️ *No active swing positions currently open.*\n100% Cash is available for high-alpha setups.")
         return
 
-    lines = ["📊 *ACTIVE SWING POSITIONS (Live Status)*", "━━━━━━━━━━━━━━━━━━━━"]
+    # Fetch live quotes for active positions
+    try:
+        from live_market_service import fetch_live_quotes
+        quotes = fetch_live_quotes([p['ticker'] for p in active])
+    except Exception:
+        quotes = {}
+
+    lines = ["🔔 *ACTIVE SWING POSITIONS (Live Status)*", "━━━━━━━━━━━━━━━━━━━━"]
     for pos in active:
-        ticker = pos['ticker'].replace(".NS", "")
-        stage = f"Stage {pos.get('chandelier_stage', 1)} Ratchet"
+        ticker = pos['ticker']
+        clean = ticker.replace(".NS", "")
+        stage = f"Stage {pos.get('chandelier_stage', 1)}"
+        entry_price = float(pos['entry_price'])
+        qty = int(pos['qty'])
+        quote = quotes.get(ticker, {})
+        cmp = quote.get('cmp', entry_price)
+
+        pnl_pct = ((cmp - entry_price) / entry_price) * 100.0
+        gross_buy = qty * entry_price
+        gross_sell = qty * cmp
+        friction = pm.calculate_friction(gross_sell, is_buy=False) + pm.calculate_friction(gross_buy, is_buy=True)
+        net_pnl_rs = (gross_sell - gross_buy) - friction
+
+        try:
+            entry_dt = pd.to_datetime(pos['entry_date'])
+            holding_days = (now - entry_dt).total_seconds() / 86400.0
+        except Exception:
+            holding_days = 0.0
+
+        pnl_color = "🟢" if net_pnl_rs >= 0 else "🔴"
+        pnl_sign = "+" if net_pnl_rs >= 0 else ""
+
         lines.append(
-            f"• *{ticker}* ({pos.get('effective_slot', 1.0):.1f} Slot)\n"
-            f"  Shares: {pos['qty']} @ ₹{pos['entry_price']:,.2f}\n"
-            f"  Trailing Stop: ₹{pos['current_trailing_stop']:,.2f} ({stage})\n"
-            f"  Initial Safety Stop: ₹{pos['initial_stop']:,.2f}\n"
+            f"📈 *{clean}*\n"
+            f"• Entry Price: ₹{entry_price:,.2f}\n"
+            f"• Current Price: ₹{cmp:,.2f}\n"
+            f"• Estimated Net PnL: {pnl_color} {pnl_sign}{pnl_pct:.2f}% ({pnl_sign}₹{net_pnl_rs:,.2f})\n"
+            f"• Holding Duration: {holding_days:.1f} days\n"
+            f"• Open Shares: {qty}\n"
+            f"• Trailing Stop: ₹{pos['current_trailing_stop']:,.2f} ({stage})\n"
         )
     lines.append("━━━━━━━━━━━━━━━━━━━━")
-    lines.append(f"• *Available Cash:* ₹{summary['cash_available']:,.2f} ({summary['cash_pct']:.1f}%)")
-    lines.append(f"• *Slots Occupied:* {summary['effective_slots_occupied']:.1f} / 3.0")
+    lines.append(f"💼 *Cash Available:* ₹{summary['cash_available']:,.2f} ({summary['cash_pct']:.1f}%)")
+    lines.append(f"🎯 *Slots Available:* {summary['effective_slots_available']:.1f} / 3.0 Open")
 
     send_reply(chat_id, "\n".join(lines))
 
