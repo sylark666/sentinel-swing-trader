@@ -199,7 +199,7 @@ def score_opportunity(df: pd.DataFrame) -> Optional[Dict]:
     reward = target - close
     rrr = reward / risk if risk > 0 else 0
 
-    if rrr >= 1.25:
+    if round(rrr, 2) >= 1.25:
         score += 15
         reasons.append(f"RRR {rrr:.2f}")
 
@@ -364,8 +364,8 @@ def run_opportunity_scan(
         if opp:
             candidates.append(opp)
 
-    # Sort opportunities by Alpha Score descending
-    candidates = sorted(candidates, key=lambda x: x['alpha_score'], reverse=True)
+    # Sort opportunities by Alpha Score descending, tie-breaking by volume surge
+    candidates = sorted(candidates, key=lambda x: (x['alpha_score'], x.get('vol_surge', 1.0)), reverse=True)
 
     # 3. Holding Health & Rotation Check
     evaluated_holdings = []
@@ -385,7 +385,7 @@ def run_opportunity_scan(
         "regime": regime,
         "total_scanned": len(tickers),
         "candidates_found": len(candidates),
-        "top_candidates": candidates[:15], # Top 15 opportunities
+        "top_candidates": candidates[:40], # Top 40 opportunities (comprehensive coverage)
         "evaluated_holdings": evaluated_holdings,
         "rotations": rotations
     }

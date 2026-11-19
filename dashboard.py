@@ -691,7 +691,7 @@ Identifies high-probability swing trades where **BOTH** independent champion mod
         st.markdown("---")
         c1, c2, c3 = st.columns([2, 2, 3])
         radar_tf = c1.selectbox("Scan Timeframe", ["4H", "1D", "1H"], index=0, key="radar_tf")
-        min_alpha = c2.slider("Minimum Alpha Score", min_value=50, max_value=120, value=75, step=5, key="radar_min_alpha")
+        min_alpha = c2.slider("Minimum Alpha Score", min_value=50, max_value=120, value=70, step=5, key="radar_min_alpha")
         btn_scan = c3.button("🔍 Run Strategy 1 Scan", type="primary", use_container_width=True, key="btn_run_s1_scan")
 
         if btn_scan or 'cached_scan_results' not in st.session_state:
