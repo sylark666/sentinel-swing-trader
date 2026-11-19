@@ -172,12 +172,57 @@ def check_active_positions_and_report_status(checkpoint_title: str) -> List[Dict
         # Update max_high in database if new peak reached
         if day_high > max_high:
             max_high = day_high
-            with pm.get_db() as conn:
-                conn.cursor().execute(
-                    "UPDATE active_swing_trades SET max_high = ? WHERE ticker = ?",
-                    (max_high, ticker)
-                )
-                conn.commit()
+
+        strat = pos.get('strategy', 'Strategy 1: 4H Golden Cross Runner')
+        is_renko = "Strategy 2" in strat or "Renko" in strat
+
+        new_trailing_stop = trailing_stop
+
+        if is_renko:
+            # Strategy 2: AI Renko Supertrend
+            # Brick size is approx 2.5% of entry price
+            brick_size = round(entry_price * 0.025, 2)
+            # Break-Even Ratchet: when price reaches +2 Bricks (+5.0% gain or 1:1 RRR)
+            if max_high >= (entry_price + (2.0 * brick_size)):
+                be_stop = round(entry_price * 1.002, 2)  # Entry + 0.2% roundtrip friction coverage
+                new_trailing_stop = max(new_trailing_stop, be_stop)
+                stage = 2  # Stage 2 represents Break-Even Lock
+        else:
+            # Strategy 1: Dual-Stage Chandelier Trailing Exit
+            atr = 0.0
+            try:
+                df_atr = load_candles_from_db(clean_ticker, timeframe="4H")
+                if not df_atr.empty and len(df_atr) >= 15:
+                    df_atr = calculate_4h_indicators(df_atr, chandelier_mult=3.0)
+                    atr = float(df_atr.iloc[-1].get('ATR', 0.0))
+            except Exception:
+                pass
+
+            unrealized_gain_pct = ((cmp - entry_price) / entry_price) * 100.0
+            if unrealized_gain_pct >= 10.0:
+                stage = 2
+                active_mult = 2.3  # Profit lock: tightened 2.3x ATR
+            else:
+                stage = 1
+                active_mult = 3.0  # Initial wide breathing room
+
+            if atr > 0:
+                raw_chand = max_high - (active_mult * atr)
+            else:
+                raw_chand = max_high * (0.93 if stage == 2 else 0.90)
+
+            # Monotonic rule: Stop loss ONLY ratchets UP, never lower
+            new_trailing_stop = max(new_trailing_stop, round(raw_chand, 2))
+
+        # Persist updated max_high, trailing stop, and stage to DB
+        with pm.get_db() as conn:
+            conn.cursor().execute(
+                "UPDATE active_swing_trades SET max_high = ?, current_trailing_stop = ?, chandelier_stage = ? WHERE ticker = ?",
+                (max_high, new_trailing_stop, stage, ticker)
+            )
+            conn.commit()
+
+        trailing_stop = new_trailing_stop
 
         # Calculate PnL & holding duration
         pnl_pct = ((cmp - entry_price) / entry_price) * 100.0
@@ -204,7 +249,29 @@ def check_active_positions_and_report_status(checkpoint_title: str) -> List[Dict
         elif cmp < trailing_stop:
             exit_triggered = True
             exit_price = cmp
-            exit_reason = f"Trailing Chandelier Stop Hit @ ₹{trailing_stop:,.2f} (Stage {stage})"
+            if is_renko:
+                exit_reason = f"Renko Trailing Stop Hit @ ₹{trailing_stop:,.2f} ({'Break-Even Ratchet Lock' if stage == 2 else 'Initial Brick Stop'})"
+            else:
+                exit_reason = f"Trailing Chandelier Stop Hit @ ₹{trailing_stop:,.2f} (Stage {stage})"
+        elif is_renko:
+            # Check for Renko Supertrend Bearish Red Flip
+            try:
+                from strategy_renko.renko_engine import RenkoEngine
+                from strategy_renko.indicators import calculate_supertrend
+                df_renko = load_candles_from_db(clean_ticker, timeframe="4H")
+                if not df_renko.empty and len(df_renko) >= 30:
+                    b_size = max(0.5, round(entry_price * 0.025, 2))
+                    re = RenkoEngine(brick_size=b_size)
+                    bricks = re.build_bricks(df_renko)
+                    if len(bricks) >= 15:
+                        st_df = calculate_supertrend(bricks, period=10, multiplier=2.0)
+                        last_brick = st_df.iloc[-1].to_dict()
+                        if last_brick.get("signal") == -1 or last_brick.get("trend") == -1:
+                            exit_triggered = True
+                            exit_price = cmp
+                            exit_reason = "Renko Supertrend Bearish Reversal (Trend flipped Red)"
+            except Exception as e:
+                logger.warning(f"Renko check failed for {ticker}: {e}")
 
         if exit_triggered:
             # ACTION REQUIRED: Send to Telegram AND Gmail!
@@ -230,6 +297,7 @@ def check_active_positions_and_report_status(checkpoint_title: str) -> List[Dict
             pnl_color = "🟢" if net_pnl_rs >= 0 else "🔴"
             pnl_sign = "+" if net_pnl_rs >= 0 else ""
             strat_label = pos.get('strategy', 'Strategy 1: 4H Golden Cross Runner')
+            stop_label = "Break-Even Lock (Stage 2)" if (is_renko and stage == 2) else f"Stage {stage} Trailing"
             card = (
                 f"📈 *{clean_ticker}* | _{strat_label}_\n"
                 f"• Entry Price: ₹{entry_price:,.2f}\n"
@@ -237,7 +305,7 @@ def check_active_positions_and_report_status(checkpoint_title: str) -> List[Dict
                 f"• Estimated Net PnL: {pnl_color} {pnl_sign}{pnl_pct:.2f}% ({pnl_sign}₹{net_pnl_rs:,.2f})\n"
                 f"• Holding Duration: {holding_days:.1f} days\n"
                 f"• Open Shares: {qty}\n"
-                f"• Trailing Stop: ₹{trailing_stop:,.2f} (Stage {stage})"
+                f"• Trailing Stop: ₹{trailing_stop:,.2f} ({stop_label})"
             )
             trade_cards.append(card)
 
