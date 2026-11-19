@@ -687,10 +687,17 @@ Identifies high-probability swing trades where **BOTH** independent champion mod
                 elif vol >= 0.8: conf_score += 10
                 if c1.get('alpha_score', 70) >= 80: conf_score += 10
 
+                stage = c1.get('trend_stage', '⭐ Days 2–5 Sweet Spot')
+                dist_ema = c1.get('dist_20_ema', 0.0)
+                days_in_trend = c1.get('days_ago', 0.0)
+
                 confluence_list.append({
                     "ticker": sym,
                     "confluence_rank": "⭐⭐⭐⭐⭐ Ultra" if conf_score >= 130 else "⭐⭐⭐⭐ High",
                     "confluence_score": conf_score,
+                    "trend_stage": stage,
+                    "dist_20_ema": dist_ema,
+                    "days_in_trend": f"Day {days_in_trend:.1f}" if days_in_trend < 900 else "-",
                     "price": p,
                     "sug_qty": f"{sug_qty} shs",
                     "est_cost": est_cost,
@@ -705,15 +712,49 @@ Identifies high-probability swing trades where **BOTH** independent champion mod
 
         confluence_list.sort(key=lambda x: x['confluence_score'], reverse=True)
 
-        if confluence_list:
-            st.success(f"🏆 Found **{len(confluence_list)} Dual-Strategy Confluence Candidates** confirming buy signals on BOTH engines!")
+        col_f1, col_f2 = st.columns([3, 4])
+        stage_filter = col_f1.selectbox(
+            "🎯 Trend Maturity / Sweet Spot Filter",
+            [
+                "⭐ Days 2–5: Sweet Spot (Recommended - Confirmed & Near 20 EMA)",
+                "⚡ Day 1: Fresh Breakouts (Early / Higher Risk)",
+                "🚀 Established Runners (Active Trending Momentum)",
+                "🌟 All Qualified Confluence Setups"
+            ],
+            index=0,
+            key="confluence_stage_filter"
+        )
+
+        display_confluence = confluence_list
+        if stage_filter.startswith("⭐ Days 2–5"):
+            matched = [c for c in confluence_list if "Sweet Spot" in c['trend_stage']]
+            if matched:
+                display_confluence = matched
+            else:
+                col_f2.warning("No Sweet Spot confluence setups found in latest scan; showing all qualified setups.")
+        elif stage_filter.startswith("⚡ Day 1"):
+            matched = [c for c in confluence_list if "Day 1" in c['trend_stage']]
+            if matched:
+                display_confluence = matched
+            else:
+                col_f2.warning("No Day 1 breakout setups found in latest scan; showing all qualified setups.")
+        elif stage_filter.startswith("🚀 Established"):
+            matched = [c for c in confluence_list if "Established" in c['trend_stage']]
+            if matched:
+                display_confluence = matched
+
+        if display_confluence:
+            st.success(f"🏆 Found **{len(display_confluence)} Qualified Confluence Candidates** confirming buy signals on BOTH engines!")
             st.info(f"💡 **Position Sizing:** Quantities and costs are dynamically calibrated to your **₹{slot_alloc:,.2f} Slot Sizing** (30% account equity). Both strategies operate as **Unlimited Runners** with trailing exits.")
-            df_conf = pd.DataFrame(confluence_list)
+            df_conf = pd.DataFrame(display_confluence)
+            df_conf['dist_disp'] = df_conf['dist_20_ema'].apply(lambda x: f"{x:+.1f}%" if pd.notnull(x) else "-")
             df_conf_disp = df_conf[[
-                'ticker', 'confluence_rank', 'price', 'sug_qty', 'est_cost', 's1_alpha', 's2_status', 'vol_surge', 'stop_loss', 'sl_pct', 'exit_rule', 'rationale'
+                'ticker', 'confluence_rank', 'trend_stage', 'dist_disp', 'price', 'sug_qty', 'est_cost', 's1_alpha', 's2_status', 'vol_surge', 'stop_loss', 'sl_pct', 'exit_rule', 'rationale'
             ]].rename(columns={
                 'ticker': 'Ticker',
-                'confluence_rank': 'Confluence Tier',
+                'confluence_rank': 'Tier',
+                'trend_stage': 'Trend Maturity',
+                'dist_disp': '20 EMA Dist',
                 'price': 'Current Price (₹)',
                 'sug_qty': 'Suggested Shares',
                 'est_cost': 'Target Cost (₹)',
@@ -738,11 +779,16 @@ Identifies high-probability swing trades where **BOTH** independent champion mod
         with col_rec1:
             st.markdown("#### 🏆 Strategy 1: Top 4H Golden Cross Breakouts")
             if s1_cached_cands:
-                df_s1_top = pd.DataFrame(s1_cached_cands[:8])
+                # Prioritize Sweet Spot setups in top recommendation cards
+                sweet_s1 = [c for c in s1_cached_cands if "Sweet Spot" in c.get('trend_stage', '')]
+                other_s1 = [c for c in s1_cached_cands if "Sweet Spot" not in c.get('trend_stage', '')]
+                s1_top_display = (sweet_s1 + other_s1)[:8]
+                df_s1_top = pd.DataFrame(s1_top_display)
                 df_s1_top['Suggested Shares'] = df_s1_top['close'].apply(lambda p: f"{max(1, int(slot_alloc // p))} shs" if p > 0 else "1 shs")
                 df_s1_top['Target Cost (₹)'] = df_s1_top['close'].apply(lambda p: f"₹{(max(1, int(slot_alloc // p)) * p):,.2f}" if p > 0 else "₹0.00")
-                df_s1_top_disp = df_s1_top[['ticker', 'alpha_score', 'close', 'Suggested Shares', 'Target Cost (₹)', 'stop_loss', 'vol_surge', 'reasons']].rename(columns={
-                    'ticker': 'Ticker', 'alpha_score': 'Alpha', 'close': 'CMP (₹)', 'stop_loss': 'SL (₹)', 'vol_surge': 'Vol Surge', 'reasons': 'Setup'
+                df_s1_top['dist_disp'] = df_s1_top['dist_20_ema'].apply(lambda x: f"{x:+.1f}%" if pd.notnull(x) else "-")
+                df_s1_top_disp = df_s1_top[['ticker', 'trend_stage', 'dist_disp', 'alpha_score', 'close', 'Suggested Shares', 'Target Cost (₹)', 'stop_loss', 'vol_surge', 'reasons']].rename(columns={
+                    'ticker': 'Ticker', 'trend_stage': 'Maturity', 'dist_disp': '20 EMA Dist', 'alpha_score': 'Alpha', 'close': 'CMP (₹)', 'stop_loss': 'SL (₹)', 'vol_surge': 'Vol Surge', 'reasons': 'Setup'
                 })
                 df_s1_top_disp['CMP (₹)'] = df_s1_top_disp['CMP (₹)'].apply(lambda x: f"₹{x:,.2f}")
                 df_s1_top_disp['SL (₹)'] = df_s1_top_disp['SL (₹)'].apply(lambda x: f"₹{x:,.2f}")
@@ -779,10 +825,21 @@ Identifies high-probability swing trades where **BOTH** independent champion mod
         col_reg3.metric("Status", "🟢 Active (Longs Allowed)" if regime['status'] == "BULLISH" else "🔴 Halted (Bearish Protection)")
 
         st.markdown("---")
-        c1, c2, c3 = st.columns([2, 2, 3])
+        c1, c2, c3, c4 = st.columns([2, 2, 2, 2])
         radar_tf = c1.selectbox("Scan Timeframe", ["4H", "1D", "1H"], index=0, key="radar_tf")
         min_alpha = c2.slider("Minimum Alpha Score", min_value=50, max_value=120, value=70, step=5, key="radar_min_alpha")
-        btn_scan = c3.button("🔍 Run Strategy 1 Scan", type="primary", use_container_width=True, key="btn_run_s1_scan")
+        s1_stage_filter = c3.selectbox(
+            "Trend Maturity Filter",
+            [
+                "⭐ Days 2–5: Sweet Spot (Recommended)",
+                "⚡ Day 1: Fresh Breakouts",
+                "🚀 Established Runners",
+                "🌟 All Active Trends"
+            ],
+            index=0,
+            key="s1_stage_filter"
+        )
+        btn_scan = c4.button("🔍 Run Strategy 1 Scan", type="primary", use_container_width=True, key="btn_run_s1_scan")
 
         if btn_scan or 'cached_scan_results' not in st.session_state:
             with st.spinner("Analyzing stocks for Strategy 1 Golden Crosses..."):
@@ -809,11 +866,27 @@ Identifies high-probability swing trades where **BOTH** independent champion mod
                 st.markdown("---")
 
             candidates = [c for c in scan_res.get('top_candidates', []) if c['alpha_score'] >= min_alpha]
+            if s1_stage_filter.startswith("⭐ Days 2–5"):
+                matched_s1 = [c for c in candidates if "Sweet Spot" in c.get('trend_stage', '')]
+                if matched_s1:
+                    candidates = matched_s1
+                else:
+                    st.info("No Sweet Spot setups match current filters; showing all active trends.")
+            elif s1_stage_filter.startswith("⚡ Day 1"):
+                matched_s1 = [c for c in candidates if "Day 1" in c.get('trend_stage', '')]
+                if matched_s1:
+                    candidates = matched_s1
+            elif s1_stage_filter.startswith("🚀 Established"):
+                matched_s1 = [c for c in candidates if "Established" in c.get('trend_stage', '')]
+                if matched_s1:
+                    candidates = matched_s1
+
             st.subheader(f"Strategy 1 Qualifying Opportunities ({len(candidates)} qualifying)")
             if candidates:
                 df_display = pd.DataFrame(candidates)
                 df_display['Suggested Shares'] = df_display['close'].apply(lambda p: f"{max(1, int(slot_alloc // p))} shs" if p > 0 else "1 shs")
                 df_display['Target Cost (₹)'] = df_display['close'].apply(lambda p: f"₹{(max(1, int(slot_alloc // p)) * p):,.2f}" if p > 0 else "₹0.00")
+                df_display['dist_disp'] = df_display['dist_20_ema'].apply(lambda x: f"{x:+.1f}%" if pd.notnull(x) else "-")
                 if 'timestamp' in df_display.columns:
                     if radar_tf == '1D':
                         df_display['Start Date (Buy)'] = pd.to_datetime(df_display['timestamp']).dt.strftime('%Y-%m-%d')
@@ -825,9 +898,11 @@ Identifies high-probability swing trades where **BOTH** independent champion mod
                 st.info(f"💡 **Strategy 1 Unlimited Runner:** Positions sized dynamically for your **₹{slot_alloc:,.2f} Slot Target**. Trailing exits ride trends until Chandelier stop triggers.")
                 df_display['Exit Rule'] = 'Unlimited Runner (Trailing)'
                 df_display = df_display[[
-                    'ticker', 'Start Date (Buy)', 'alpha_score', 'close', 'Suggested Shares', 'Target Cost (₹)', 'stop_loss', 'sl_pct', 'Exit Rule', 'vol_surge', 'reasons'
+                    'ticker', 'trend_stage', 'dist_disp', 'Start Date (Buy)', 'alpha_score', 'close', 'Suggested Shares', 'Target Cost (₹)', 'stop_loss', 'sl_pct', 'Exit Rule', 'vol_surge', 'reasons'
                 ]].rename(columns={
                     'ticker': 'Ticker',
+                    'trend_stage': 'Trend Maturity',
+                    'dist_disp': '20 EMA Dist',
                     'alpha_score': 'Alpha Score',
                     'close': 'Current Price (₹)',
                     'stop_loss': 'Initial Hard Stop (₹)',
@@ -837,6 +912,10 @@ Identifies high-probability swing trades where **BOTH** independent champion mod
                     'reasons': 'Setup Confluence'
                 })
                 df_display['Current Price (₹)'] = df_display['Current Price (₹)'].apply(lambda x: f"₹{x:,.2f}")
+                df_display['Initial Hard Stop (₹)'] = df_display['Initial Hard Stop (₹)'].apply(lambda x: f"₹{x:,.2f}")
+                df_display['Max Risk %'] = df_display['Max Risk %'].apply(lambda x: f"-{x:.1f}%")
+                df_display['Vol Surge'] = df_display['Vol Surge'].apply(lambda x: f"{x:.1f}x")
+                st.dataframe(df_display, use_container_width=True, hide_index=True)
                 df_display['Initial Hard Stop (₹)'] = df_display['Initial Hard Stop (₹)'].apply(lambda x: f"₹{x:,.2f}")
                 df_display['Max Risk %'] = df_display['Max Risk %'].apply(lambda x: f"-{x:.1f}%")
                 df_display['Vol Surge'] = df_display['Vol Surge'].apply(lambda x: f"{x:.1f}x")

@@ -203,6 +203,38 @@ def score_opportunity(df: pd.DataFrame) -> Optional[Dict]:
         score += 15
         reasons.append(f"RRR {rrr:.2f}")
 
+    # 5. Trend Stage & Sweet Spot Classification (Days 2 to 5 confirmation)
+    gc_matches = df[(df['EMA20'] > df['EMA50']) & (df['EMA20'].shift(1) <= df['EMA50'].shift(1))]
+    chand_matches = df[(df['Dir'] == 1) & (df['Dir'].shift(1) == -1)]
+    gc_last_idx = gc_matches.index[-1] if not gc_matches.empty else -999
+    chand_last_idx = chand_matches.index[-1] if not chand_matches.empty else -999
+    trigger_idx = max(gc_last_idx, chand_last_idx)
+
+    if trigger_idx >= 0:
+        bars_ago = (len(df) - 1) - trigger_idx
+        try:
+            ts_diff = (pd.to_datetime(df['timestamp'].iloc[-1]) - pd.to_datetime(df['timestamp'].iloc[-2])).total_seconds()
+            is_daily = ts_diff >= 70000
+        except Exception:
+            is_daily = False
+        days_ago = round(bars_ago * 1.0 if is_daily else bars_ago / 2.0, 1)
+    else:
+        bars_ago = 999
+        days_ago = 999.0
+
+    dist_20_ema = round(((close - ema20) / ema20) * 100, 1)
+
+    if days_ago <= 1.5:
+        trend_stage = "⚡ Day 1 Breakout"
+    elif 1.5 < days_ago <= 6.5 and dist_20_ema <= 6.5 and rsi <= 72:
+        trend_stage = "⭐ Days 2–5 Sweet Spot"
+        score += 10.0  # Quality bonus for verified sweet spot entry
+        reasons.append(f"Sweet Spot (Day {days_ago})")
+    elif dist_20_ema > 8.0 or rsi >= 75:
+        trend_stage = "⚠️ Mature / Extended"
+    else:
+        trend_stage = "🚀 Established Runner"
+
     # Threshold: Must have at least 50 points to be a qualifying candidate
     if score < 50:
         return None
@@ -220,6 +252,10 @@ def score_opportunity(df: pd.DataFrame) -> Optional[Dict]:
         "alpha_score": round(score, 1),
         "vol_surge": round(vol_surge, 2),
         "rsi": round(rsi, 1),
+        "trend_stage": trend_stage,
+        "days_ago": days_ago,
+        "bars_ago": bars_ago,
+        "dist_20_ema": dist_20_ema,
         "reasons": " | ".join(reasons)
     }
 
@@ -385,7 +421,7 @@ def run_opportunity_scan(
         "regime": regime,
         "total_scanned": len(tickers),
         "candidates_found": len(candidates),
-        "top_candidates": candidates[:40], # Top 40 opportunities (comprehensive coverage)
+        "top_candidates": candidates[:80], # Top 80 opportunities (comprehensive coverage)
         "evaluated_holdings": evaluated_holdings,
         "rotations": rotations
     }
