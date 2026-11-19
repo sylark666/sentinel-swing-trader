@@ -78,6 +78,31 @@ def load_data_source(symbol: str, timeframe: str, source: str, period: str = "73
     else:
         return fetch_data(symbol, timeframe, period=period)
 
+def get_live_or_cached_cmp(ticker: str, fallback_price: float = 0.0) -> float:
+    """Fetches real-time market price via yfinance with instant local DB candle fallback."""
+    try:
+        import yfinance as yf
+        t = yf.Ticker(ticker)
+        fi = t.fast_info
+        cmp = float(fi.get('lastPrice') or fi.get('regularMarketPrice') or 0.0)
+        if cmp > 0.0:
+            return round(cmp, 2)
+    except Exception:
+        pass
+
+    try:
+        clean_sym = ticker if ticker.endswith(".NS") else f"{ticker}.NS"
+        df_c = load_candles_from_db(clean_sym, timeframe="4H")
+        if not df_c.empty:
+            return round(float(df_c.iloc[-1]['close']), 2)
+        df_1d = load_candles_from_db(clean_sym, timeframe="1D")
+        if not df_1d.empty:
+            return round(float(df_1d.iloc[-1]['close']), 2)
+    except Exception:
+        pass
+
+    return fallback_price
+
 st.set_page_config(page_title="Sentinel-Swing Console", layout="wide", page_icon="🛡️")
 st.title("🛡️ Sentinel-Swing | Quant Evaluation Console")
 
@@ -391,9 +416,31 @@ with tab_live:
     st.markdown("---")
 
     # 1. Active Holdings
-    st.subheader(f"🟢 Active Swing Positions ({len(active_trades)})")
     if active_trades:
         df_act = pd.DataFrame(active_trades)
+        cmps = []
+        pnl_strs = []
+        total_unrealized_pnl = 0.0
+
+        for idx, row in df_act.iterrows():
+            sym = row['ticker']
+            entry = float(row['entry_price'])
+            q = int(row['qty'])
+            cmp = get_live_or_cached_cmp(sym, entry)
+            gross_b = q * entry
+            gross_c = q * cmp
+            fric = pm.calculate_friction(gross_c, is_buy=False) + pm.calculate_friction(gross_b, is_buy=True)
+            pnl = (gross_c - gross_b) - fric
+            pnl_pct = (pnl / gross_b) * 100 if gross_b > 0 else 0.0
+            total_unrealized_pnl += pnl
+
+            cmps.append(f"₹{cmp:,.2f}")
+            pnl_color = "🟢 +" if pnl >= 0 else "🔴 -"
+            pnl_sign = "+" if pnl >= 0 else ""
+            pnl_strs.append(f"{pnl_color}₹{abs(pnl):,.2f} ({pnl_sign}{pnl_pct:.2f}%)")
+
+        df_act['CMP'] = cmps
+        df_act['Current PnL'] = pnl_strs
         df_act['Entry Date'] = pd.to_datetime(df_act['entry_date']).dt.strftime('%Y-%m-%d %H:%M')
         df_act['Entry Price'] = df_act['entry_price'].apply(lambda x: f"₹{x:,.2f}")
         df_act['Current Stop'] = df_act['current_trailing_stop'].apply(lambda x: f"₹{x:,.2f}")
@@ -403,11 +450,15 @@ with tab_live:
         if 'strategy' not in df_act.columns:
             df_act['strategy'] = 'Strategy 1: 4H Golden Cross Runner'
 
-        df_act_disp = df_act[['ticker', 'strategy', 'qty', 'Entry Price', 'Current Stop', 'Initial Stop', 'Slot Size', 'Ratchet Stage', 'status', 'Entry Date']].rename(columns={
-            'ticker': 'Ticker', 'strategy': 'Strategy', 'qty': 'Shares', 'status': 'Status'
+        pnl_badge = f"🟢 +₹{total_unrealized_pnl:,.2f}" if total_unrealized_pnl >= 0 else f"🔴 -₹{abs(total_unrealized_pnl):,.2f}"
+        st.subheader(f"🟢 Active Swing Positions ({len(active_trades)}) — Total Unrealized PnL: {pnl_badge}")
+
+        df_act_disp = df_act[['ticker', 'strategy', 'qty', 'Entry Price', 'CMP', 'Current PnL', 'Current Stop', 'Initial Stop', 'Slot Size', 'Ratchet Stage', 'status', 'Entry Date']].rename(columns={
+            'ticker': 'Ticker', 'strategy': 'Strategy', 'qty': 'Shares', 'CMP': 'Current Price (CMP)', 'Current PnL': 'Current Net PnL', 'status': 'Status'
         })
         st.dataframe(df_act_disp, use_container_width=True, hide_index=True)
     else:
+        st.subheader("🟢 Active Swing Positions (0)")
         st.info("No active swing positions open. 100% Cash ready for high-alpha setups.")
 
     st.markdown("---")
