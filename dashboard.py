@@ -400,9 +400,11 @@ with tab_live:
         df_act['Initial Stop'] = df_act['initial_stop'].apply(lambda x: f"₹{x:,.2f}")
         df_act['Slot Size'] = df_act['effective_slot'].apply(lambda x: f"{x:.1f} Slot")
         df_act['Ratchet Stage'] = df_act['chandelier_stage'].apply(lambda x: f"Stage {x} (2.3x)" if x == 2 else f"Stage {x} (3.0x)")
+        if 'strategy' not in df_act.columns:
+            df_act['strategy'] = 'Strategy 1: 4H Golden Cross Runner'
 
-        df_act_disp = df_act[['ticker', 'qty', 'Entry Price', 'Current Stop', 'Initial Stop', 'Slot Size', 'Ratchet Stage', 'status', 'Entry Date']].rename(columns={
-            'ticker': 'Ticker', 'qty': 'Shares', 'status': 'Status'
+        df_act_disp = df_act[['ticker', 'strategy', 'qty', 'Entry Price', 'Current Stop', 'Initial Stop', 'Slot Size', 'Ratchet Stage', 'status', 'Entry Date']].rename(columns={
+            'ticker': 'Ticker', 'strategy': 'Strategy', 'qty': 'Shares', 'status': 'Status'
         })
         st.dataframe(df_act_disp, use_container_width=True, hide_index=True)
     else:
@@ -416,7 +418,18 @@ with tab_live:
     with col_log1:
         st.markdown("### 📝 Log Buy / Scale-In")
         with st.form("form_log_buy", clear_on_submit=True):
-            b_sym = st.text_input("Stock Symbol (e.g. TECHM, HAL, TRENT)").upper().strip()
+            b_sym = st.text_input("Stock Symbol (e.g. TECHM, HAL, TRENT, POONAWALLA)").upper().strip()
+            b_strat = st.selectbox(
+                "Trading Strategy Engine",
+                [
+                    "Strategy 1: 4H Golden Cross Runner",
+                    "Strategy 2: AI Renko Supertrend",
+                    "Dual Confluence (Both Strategies)",
+                    "Discretionary / Manual Setup"
+                ],
+                index=0,
+                help="Select which strategy rules should govern and trail this position."
+            )
             b_qty = st.number_input("Shares Executed", min_value=1, value=10, step=1)
             b_price = st.number_input("Executed Buy Price (₹)", min_value=0.1, value=100.0, step=0.5)
             b_sl = st.number_input("Initial Stop Loss (₹) [Default -5%]", min_value=0.1, value=round(b_price * 0.95, 2), step=0.5)
@@ -424,7 +437,7 @@ with tab_live:
             submit_buy = st.form_submit_button("✅ Record Buy Execution", type="primary", use_container_width=True)
             if submit_buy:
                 if b_sym:
-                    ok, msg = pm.log_buy_trade(b_sym, b_qty, b_price, b_sl)
+                    ok, msg = pm.log_buy_trade(b_sym, b_qty, b_price, b_sl, strategy=b_strat)
                     if ok:
                         st.success(msg)
                         time.sleep(1)

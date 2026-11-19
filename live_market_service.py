@@ -229,8 +229,9 @@ def check_active_positions_and_report_status(checkpoint_title: str) -> List[Dict
             # Position is healthy -> format hourly status card in user's exact requested structure
             pnl_color = "🟢" if net_pnl_rs >= 0 else "🔴"
             pnl_sign = "+" if net_pnl_rs >= 0 else ""
+            strat_label = pos.get('strategy', 'Strategy 1: 4H Golden Cross Runner')
             card = (
-                f"📈 *{clean_ticker}*\n"
+                f"📈 *{clean_ticker}* | _{strat_label}_\n"
                 f"• Entry Price: ₹{entry_price:,.2f}\n"
                 f"• Current Price: ₹{cmp:,.2f}\n"
                 f"• Estimated Net PnL: {pnl_color} {pnl_sign}{pnl_pct:.2f}% ({pnl_sign}₹{net_pnl_rs:,.2f})\n"

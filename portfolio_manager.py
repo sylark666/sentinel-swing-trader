@@ -113,6 +113,23 @@ def init_portfolio_db(initial_capital: float = 100000.0):
             );
         """)
 
+        # Migration: Ensure strategy column exists in active_swing_trades and closed_trades
+        try:
+            cursor.execute("PRAGMA table_info(active_swing_trades)")
+            act_cols = [r[1] for r in cursor.fetchall()]
+            if 'strategy' not in act_cols:
+                cursor.execute("ALTER TABLE active_swing_trades ADD COLUMN strategy TEXT DEFAULT 'Strategy 1: 4H Golden Cross Runner'")
+        except Exception as e:
+            logger.warning(f"Error checking strategy column in active_swing_trades: {e}")
+
+        try:
+            cursor.execute("PRAGMA table_info(closed_trades)")
+            cls_cols = [r[1] for r in cursor.fetchall()]
+            if 'strategy' not in cls_cols:
+                cursor.execute("ALTER TABLE closed_trades ADD COLUMN strategy TEXT DEFAULT 'Strategy 1: 4H Golden Cross Runner'")
+        except Exception as e:
+            logger.warning(f"Error checking strategy column in closed_trades: {e}")
+
         # Initialize ledger if not already initialized
         cursor.execute("SELECT COUNT(*) FROM portfolio_ledger")
         if cursor.fetchone()[0] == 0:
@@ -197,10 +214,10 @@ def get_active_trades() -> List[Dict]:
         return [dict(r) for r in cursor.fetchall()]
 
 
-def log_buy_trade(ticker: str, qty: int, price: float, stop_loss: float, alpha_score: float = 100.0) -> Tuple[bool, str]:
+def log_buy_trade(ticker: str, qty: int, price: float, stop_loss: float, alpha_score: float = 100.0, strategy: str = "Strategy 1: 4H Golden Cross Runner") -> Tuple[bool, str]:
     """
     Logs an executed buy trade.
-    Checks cash balance, calculates initial safety stop, occupies 1 slot.
+    Checks cash balance, calculates initial safety stop, occupies 1 slot, records strategy attribution.
     """
     ticker = ticker.upper().strip()
     if not ticker.endswith(".NS") and ticker != "NIFTY":
@@ -233,23 +250,23 @@ def log_buy_trade(ticker: str, qty: int, price: float, stop_loss: float, alpha_s
 
             cursor.execute("""
                 UPDATE active_swing_trades 
-                SET qty = ?, entry_price = ?, initial_stop = MIN(initial_stop, ?), current_trailing_stop = MIN(current_trailing_stop, ?), effective_slot = 1.0
+                SET qty = ?, entry_price = ?, initial_stop = MIN(initial_stop, ?), current_trailing_stop = MIN(current_trailing_stop, ?), effective_slot = 1.0, strategy = ?
                 WHERE ticker = ?
-            """, (new_qty, vwap, stop_loss, stop_loss, ticker))
+            """, (new_qty, vwap, stop_loss, stop_loss, strategy, ticker))
 
             action_type = "SCALE_IN"
-            action_payload = {"ticker": ticker, "added_qty": qty, "price": price, "total_cost": total_cost}
-            msg = f"✅ Scaled into `{ticker}`: Added {qty} shares @ ₹{price:,.2f}. New Holding: {new_qty} shares @ VWAP ₹{vwap:,.2f}."
+            action_payload = {"ticker": ticker, "added_qty": qty, "price": price, "total_cost": total_cost, "strategy": strategy}
+            msg = f"✅ Scaled into `{ticker}` ({strategy}): Added {qty} shares @ ₹{price:,.2f}. New Holding: {new_qty} shares @ VWAP ₹{vwap:,.2f}."
         else:
             cursor.execute("""
                 INSERT INTO active_swing_trades 
-                (ticker, entry_date, entry_price, qty, initial_stop, current_trailing_stop, max_high, chandelier_stage, alpha_score, effective_slot, status)
-                VALUES (?, ?, ?, ?, ?, ?, ?, 1, ?, 1.0, 'ACTIVE')
-            """, (ticker, now, price, qty, stop_loss, stop_loss, price, alpha_score))
+                (ticker, entry_date, entry_price, qty, initial_stop, current_trailing_stop, max_high, chandelier_stage, alpha_score, effective_slot, status, strategy)
+                VALUES (?, ?, ?, ?, ?, ?, ?, 1, ?, 1.0, 'ACTIVE', ?)
+            """, (ticker, now, price, qty, stop_loss, stop_loss, price, alpha_score, strategy))
 
             action_type = "BUY"
-            action_payload = {"ticker": ticker, "qty": qty, "price": price, "total_cost": total_cost, "stop_loss": stop_loss}
-            msg = f"✅ Logged `{ticker}`: Bought {qty} shares @ ₹{price:,.2f} (Total: ₹{total_cost:,.2f}). Stop Loss: ₹{stop_loss:,.2f}."
+            action_payload = {"ticker": ticker, "qty": qty, "price": price, "total_cost": total_cost, "stop_loss": stop_loss, "strategy": strategy}
+            msg = f"✅ Logged `{ticker}` ({strategy}): Bought {qty} shares @ ₹{price:,.2f} (Total: ₹{total_cost:,.2f}). Initial Stop: ₹{stop_loss:,.2f}."
 
         # Deduct cash
         cursor.execute("UPDATE portfolio_ledger SET cash_available = cash_available - ? WHERE id = 1", (total_cost,))
