@@ -176,13 +176,22 @@ def score_opportunity(df: pd.DataFrame) -> Optional[Dict]:
         score += 20
         reasons.append(f"Pullback Bounce (RSI: {rsi:.1f})")
 
-    # C) MACD Bullish Crossover or Expansion
-    if last['MACD'] > last['MACD_Signal']:
+    # C) MACD & RSI Dual Momentum Confirmation (Up to 20 Points)
+    rsi_ok = (48.0 <= rsi <= 68.0)
+    macd_bullish = bool(last['MACD'] > last['MACD_Signal'])
+    macd_hist_val = float(last.get('MACD_Hist', 0.0))
+    rsi_macd_confirmed = bool(rsi_ok and macd_bullish and macd_hist_val > 0)
+
+    if rsi_macd_confirmed:
+        score += 20.0
+        reasons.append(f"RSI ({rsi:.0f}) + Expanding MACD")
+    elif macd_bullish:
         if prev['MACD'] <= prev['MACD_Signal']:
-            score += 15
+            score += 15.0
             reasons.append("MACD Bullish Cross")
         else:
-            score += 5
+            score += 8.0
+            reasons.append("MACD Bullish")
 
     # 3. Volume Expansion (Up to 15 Points)
     if vol_surge >= 1.5:
@@ -239,6 +248,8 @@ def score_opportunity(df: pd.DataFrame) -> Optional[Dict]:
     if score < 50:
         return None
 
+    momentum_badge = f"🟢 RSI {rsi:.0f} | MACD Bullish" if rsi_macd_confirmed else f"⚪ RSI {rsi:.0f} | MACD {'Positive' if macd_bullish else 'Neutral'}"
+
     return {
         "ticker": str(last['ticker']),
         "timestamp": str(last['timestamp']),
@@ -252,6 +263,10 @@ def score_opportunity(df: pd.DataFrame) -> Optional[Dict]:
         "alpha_score": round(score, 1),
         "vol_surge": round(vol_surge, 2),
         "rsi": round(rsi, 1),
+        "macd_hist": round(macd_hist_val, 2),
+        "macd_bullish": macd_bullish,
+        "rsi_macd_confirmed": rsi_macd_confirmed,
+        "momentum_badge": momentum_badge,
         "trend_stage": trend_stage,
         "days_ago": days_ago,
         "bars_ago": bars_ago,

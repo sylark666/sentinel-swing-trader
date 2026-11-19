@@ -447,6 +447,24 @@ def scan_for_swing_entries(summary: Dict):
                     alpha += 10.0
                     reasons.append("Chandelier Buy Zone Aligned")
 
+                # RSI (48-68) + Bullish MACD Expansion Confirmation
+                try:
+                    delta = feat_df['close'].diff()
+                    gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
+                    loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
+                    rs = gain / (loss.replace(0, np.nan))
+                    rsi_val = float((100 - (100 / (1 + rs))).fillna(50).iloc[-1])
+                    ema12 = feat_df['close'].ewm(span=12, adjust=False).mean()
+                    ema26 = feat_df['close'].ewm(span=26, adjust=False).mean()
+                    macd_l = (ema12 - ema26).iloc[-1]
+                    macd_s = (ema12 - ema26).ewm(span=9, adjust=False).mean().iloc[-1]
+                    macd_h = macd_l - macd_s
+                    if 48.0 <= rsi_val <= 68.0 and macd_l > macd_s and macd_h > 0:
+                        alpha += 20.0
+                        reasons.append(f"RSI ({rsi_val:.0f}) + Expanding MACD Confirmed")
+                except Exception:
+                    pass
+
                 hard_sl = round(c - (2.3 * atr), 2) if atr > 0 else round(c * 0.95, 2)
                 candidates.append({
                     "ticker": sym,

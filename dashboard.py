@@ -645,8 +645,8 @@ Identifies high-probability swing trades where **BOTH** independent champion mod
         s1_cached_cands = st.session_state.get('cached_scan_results', {}).get('top_candidates', [])
         s2_cached_list = st.session_state.get('cached_renko_scan', [])
 
-        # Auto-invalidate legacy cache missing the new 'dist_20_ema' or 'trend_stage' keys
-        if s1_cached_cands and ('dist_20_ema' not in s1_cached_cands[0] or 'trend_stage' not in s1_cached_cands[0]):
+        # Auto-invalidate legacy cache missing the new 'dist_20_ema', 'trend_stage', or 'momentum_badge' keys
+        if s1_cached_cands and ('dist_20_ema' not in s1_cached_cands[0] or 'trend_stage' not in s1_cached_cands[0] or 'momentum_badge' not in s1_cached_cands[0]):
             st.session_state.pop('cached_scan_results', None)
             s1_cached_cands = []
 
@@ -700,12 +700,16 @@ Identifies high-probability swing trades where **BOTH** independent champion mod
                 stage = c1.get('trend_stage', '⭐ Days 2–5 Sweet Spot')
                 dist_ema = c1.get('dist_20_ema', 0.0)
                 days_in_trend = c1.get('days_ago', 0.0)
+                rsi_conf = c1.get('rsi_macd_confirmed', False)
+                mom_badge = c1.get('momentum_badge', '🟢 Confirmed')
 
                 confluence_list.append({
                     "ticker": sym,
                     "confluence_rank": "⭐⭐⭐⭐⭐ Ultra" if conf_score >= 130 else "⭐⭐⭐⭐ High",
                     "confluence_score": conf_score,
                     "trend_stage": stage,
+                    "rsi_macd_confirmed": rsi_conf,
+                    "momentum": mom_badge,
                     "dist_20_ema": dist_ema,
                     "days_in_trend": f"Day {days_in_trend:.1f}" if days_in_trend < 900 else "-",
                     "price": p,
@@ -734,6 +738,12 @@ Identifies high-probability swing trades where **BOTH** independent champion mod
             index=0,
             key="confluence_stage_filter"
         )
+        require_mom_conf = col_f2.checkbox(
+            "⚡ Require RSI (48–68) + Bullish MACD Expansion",
+            value=False,
+            help="Filters for RSI between 48-68 and positive expanding MACD histogram to eliminate momentum exhaustion.",
+            key="confluence_mom_conf"
+        )
 
         display_confluence = confluence_list
         if stage_filter.startswith("⭐ Days 2–5"):
@@ -753,6 +763,13 @@ Identifies high-probability swing trades where **BOTH** independent champion mod
             if matched:
                 display_confluence = matched
 
+        if require_mom_conf:
+            matched_mom = [c for c in display_confluence if c.get('rsi_macd_confirmed', False)]
+            if matched_mom:
+                display_confluence = matched_mom
+            else:
+                col_f2.info("No setups currently match strict RSI+MACD filter; showing filtered maturity setups.")
+
         if display_confluence:
             st.success(f"🏆 Found **{len(display_confluence)} Qualified Confluence Candidates** confirming buy signals on BOTH engines!")
             st.info(f"💡 **Position Sizing:** Quantities and costs are dynamically calibrated to your **₹{slot_alloc:,.2f} Slot Sizing** (30% account equity). Both strategies operate as **Unlimited Runners** with trailing exits.")
@@ -766,7 +783,7 @@ Identifies high-probability swing trades where **BOTH** independent champion mod
 
             for col_req, def_val in [
                 ('ticker', '-'), ('confluence_rank', '⭐⭐⭐⭐ High'), ('trend_stage', '⭐ Days 2–5 Sweet Spot'),
-                ('dist_disp', '-'), ('price', 0.0), ('sug_qty', '1 shs'), ('est_cost', 0.0),
+                ('momentum', '🟢 Confirmed'), ('dist_disp', '-'), ('price', 0.0), ('sug_qty', '1 shs'), ('est_cost', 0.0),
                 ('s1_alpha', '75'), ('s2_status', 'Green Trend Active'), ('vol_surge', '1.0x'),
                 ('stop_loss', 0.0), ('sl_pct', '-5.0%'), ('exit_rule', 'Unlimited Runner (Trailing Exit)'),
                 ('rationale', '')
@@ -775,11 +792,12 @@ Identifies high-probability swing trades where **BOTH** independent champion mod
                     df_conf[col_req] = def_val
 
             df_conf_disp = df_conf[[
-                'ticker', 'confluence_rank', 'trend_stage', 'dist_disp', 'price', 'sug_qty', 'est_cost', 's1_alpha', 's2_status', 'vol_surge', 'stop_loss', 'sl_pct', 'exit_rule', 'rationale'
+                'ticker', 'confluence_rank', 'trend_stage', 'momentum', 'dist_disp', 'price', 'sug_qty', 'est_cost', 's1_alpha', 's2_status', 'vol_surge', 'stop_loss', 'sl_pct', 'exit_rule', 'rationale'
             ]].rename(columns={
                 'ticker': 'Ticker',
                 'confluence_rank': 'Tier',
                 'trend_stage': 'Trend Maturity',
+                'momentum': 'Momentum (RSI/MACD)',
                 'dist_disp': '20 EMA Dist',
                 'price': 'Current Price (₹)',
                 'sug_qty': 'Suggested Shares',
@@ -818,17 +836,19 @@ Identifies high-probability swing trades where **BOTH** independent champion mod
                     df_s1_top['dist_disp'] = "-"
                 if 'trend_stage' not in df_s1_top.columns:
                     df_s1_top['trend_stage'] = "⭐ Days 2–5 Sweet Spot"
+                if 'momentum_badge' not in df_s1_top.columns:
+                    df_s1_top['momentum_badge'] = "🟢 Confirmed"
 
                 for col_req, def_val in [
-                    ('ticker', '-'), ('trend_stage', '⭐ Days 2–5 Sweet Spot'), ('dist_disp', '-'),
+                    ('ticker', '-'), ('trend_stage', '⭐ Days 2–5 Sweet Spot'), ('momentum_badge', '🟢 Confirmed'), ('dist_disp', '-'),
                     ('alpha_score', 70.0), ('close', 0.0), ('Suggested Shares', '1 shs'),
                     ('Target Cost (₹)', '₹0.00'), ('stop_loss', 0.0), ('vol_surge', 1.0), ('reasons', '')
                 ]:
                     if col_req not in df_s1_top.columns:
                         df_s1_top[col_req] = def_val
 
-                df_s1_top_disp = df_s1_top[['ticker', 'trend_stage', 'dist_disp', 'alpha_score', 'close', 'Suggested Shares', 'Target Cost (₹)', 'stop_loss', 'vol_surge', 'reasons']].rename(columns={
-                    'ticker': 'Ticker', 'trend_stage': 'Maturity', 'dist_disp': '20 EMA Dist', 'alpha_score': 'Alpha', 'close': 'CMP (₹)', 'stop_loss': 'SL (₹)', 'vol_surge': 'Vol Surge', 'reasons': 'Setup'
+                df_s1_top_disp = df_s1_top[['ticker', 'trend_stage', 'momentum_badge', 'dist_disp', 'alpha_score', 'close', 'Suggested Shares', 'Target Cost (₹)', 'stop_loss', 'vol_surge', 'reasons']].rename(columns={
+                    'ticker': 'Ticker', 'trend_stage': 'Maturity', 'momentum_badge': 'Momentum (RSI/MACD)', 'dist_disp': '20 EMA Dist', 'alpha_score': 'Alpha', 'close': 'CMP (₹)', 'stop_loss': 'SL (₹)', 'vol_surge': 'Vol Surge', 'reasons': 'Setup'
                 })
                 df_s1_top_disp['CMP (₹)'] = df_s1_top_disp['CMP (₹)'].apply(lambda x: f"₹{x:,.2f}")
                 df_s1_top_disp['SL (₹)'] = df_s1_top_disp['SL (₹)'].apply(lambda x: f"₹{x:,.2f}")
@@ -880,10 +900,11 @@ Identifies high-probability swing trades where **BOTH** independent champion mod
             key="s1_stage_filter"
         )
         btn_scan = c4.button("🔍 Run Strategy 1 Scan", type="primary", use_container_width=True, key="btn_run_s1_scan")
+        s1_require_mom = st.checkbox("⚡ Require RSI (48–68) + Bullish Expanding MACD Confirmation", value=False, help="Requires RSI between 48-68 and positive expanding MACD histogram to filter out momentum exhaustion and choppy dead crosses.", key="s1_require_mom_conf")
 
         if 'cached_scan_results' in st.session_state:
             cached_cands = st.session_state.get('cached_scan_results', {}).get('top_candidates', [])
-            if cached_cands and ('dist_20_ema' not in cached_cands[0] or 'trend_stage' not in cached_cands[0]):
+            if cached_cands and ('dist_20_ema' not in cached_cands[0] or 'trend_stage' not in cached_cands[0] or 'momentum_badge' not in cached_cands[0]):
                 st.session_state.pop('cached_scan_results', None)
 
         if btn_scan or 'cached_scan_results' not in st.session_state:
@@ -926,6 +947,13 @@ Identifies high-probability swing trades where **BOTH** independent champion mod
                 if matched_s1:
                     candidates = matched_s1
 
+            if s1_require_mom:
+                matched_mom = [c for c in candidates if c.get('rsi_macd_confirmed', False)]
+                if matched_mom:
+                    candidates = matched_mom
+                else:
+                    st.info("No candidates match strict RSI + MACD confirmation; showing all active trends.")
+
             st.subheader(f"Strategy 1 Qualifying Opportunities ({len(candidates)} qualifying)")
             if candidates:
                 df_display = pd.DataFrame(candidates)
@@ -937,6 +965,8 @@ Identifies high-probability swing trades where **BOTH** independent champion mod
                     df_display['dist_disp'] = "-"
                 if 'trend_stage' not in df_display.columns:
                     df_display['trend_stage'] = "⭐ Days 2–5 Sweet Spot"
+                if 'momentum_badge' not in df_display.columns:
+                    df_display['momentum_badge'] = "🟢 Confirmed"
 
                 if 'timestamp' in df_display.columns:
                     if radar_tf == '1D':
@@ -950,7 +980,7 @@ Identifies high-probability swing trades where **BOTH** independent champion mod
                 df_display['Exit Rule'] = 'Unlimited Runner (Trailing)'
 
                 for col_req, def_val in [
-                    ('ticker', '-'), ('trend_stage', '⭐ Days 2–5 Sweet Spot'), ('dist_disp', '-'),
+                    ('ticker', '-'), ('trend_stage', '⭐ Days 2–5 Sweet Spot'), ('momentum_badge', '🟢 Confirmed'), ('dist_disp', '-'),
                     ('Start Date (Buy)', 'Immediate'), ('alpha_score', 70.0), ('close', 0.0),
                     ('Suggested Shares', '1 shs'), ('Target Cost (₹)', '₹0.00'), ('stop_loss', 0.0),
                     ('sl_pct', 5.0), ('Exit Rule', 'Unlimited Runner (Trailing)'), ('vol_surge', 1.0),
@@ -960,10 +990,11 @@ Identifies high-probability swing trades where **BOTH** independent champion mod
                         df_display[col_req] = def_val
 
                 df_display = df_display[[
-                    'ticker', 'trend_stage', 'dist_disp', 'Start Date (Buy)', 'alpha_score', 'close', 'Suggested Shares', 'Target Cost (₹)', 'stop_loss', 'sl_pct', 'Exit Rule', 'vol_surge', 'reasons'
+                    'ticker', 'trend_stage', 'momentum_badge', 'dist_disp', 'Start Date (Buy)', 'alpha_score', 'close', 'Suggested Shares', 'Target Cost (₹)', 'stop_loss', 'sl_pct', 'Exit Rule', 'vol_surge', 'reasons'
                 ]].rename(columns={
                     'ticker': 'Ticker',
                     'trend_stage': 'Trend Maturity',
+                    'momentum_badge': 'Momentum (RSI/MACD)',
                     'dist_disp': '20 EMA Dist',
                     'alpha_score': 'Alpha Score',
                     'close': 'Current Price (₹)',
