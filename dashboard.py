@@ -612,9 +612,8 @@ Identifies high-probability swing trades where **BOTH** independent champion mod
                     "s2_status": "Fresh Flip (Buy)" if is_fresh else "Green Trend Active",
                     "vol_surge": f"{vol:.1f}x",
                     "stop_loss": c2['stop_loss'],
-                    "target": c1.get('target', c2['price'] * 1.10),
-                    "target_pct": f"+{c1.get('target_pct', 10.0):.1f}%",
                     "sl_pct": f"-{c2.get('risk_pct', 2.5):.1f}%",
+                    "exit_rule": "Unlimited Runner (Trailing Exit)",
                     "rationale": f"4H Golden Cross + Renko {c2['reasons']} (Vol {vol:.1f}x)"
                 })
 
@@ -622,9 +621,10 @@ Identifies high-probability swing trades where **BOTH** independent champion mod
 
         if confluence_list:
             st.success(f"🏆 Found **{len(confluence_list)} Dual-Strategy Confluence Candidates** confirming buy signals on BOTH engines!")
+            st.info("💡 **Exit Protocol:** Both Champion Strategies operate on **Unlimited Runners with Trailing Exits** (no fixed profit caps). Positions are held to ride massive trends and closed only when an event-driven exit triggers (Chandelier Trailing Stop or Renko Supertrend Red Flip).")
             df_conf = pd.DataFrame(confluence_list)
             df_conf_disp = df_conf[[
-                'ticker', 'confluence_rank', 'price', 's1_alpha', 's2_status', 'vol_surge', 'stop_loss', 'target', 'target_pct', 'sl_pct', 'rationale'
+                'ticker', 'confluence_rank', 'price', 's1_alpha', 's2_status', 'vol_surge', 'stop_loss', 'sl_pct', 'exit_rule', 'rationale'
             ]].rename(columns={
                 'ticker': 'Ticker',
                 'confluence_rank': 'Confluence Tier',
@@ -632,15 +632,13 @@ Identifies high-probability swing trades where **BOTH** independent champion mod
                 's1_alpha': 'Strategy 1 Alpha',
                 's2_status': 'Strategy 2 Renko',
                 'vol_surge': 'Vol Surge',
-                'stop_loss': 'Stop Loss (₹)',
-                'target': 'Target (₹)',
-                'target_pct': 'Target %',
-                'sl_pct': 'SL %',
+                'stop_loss': 'Initial Stop Loss (₹)',
+                'sl_pct': 'Max Risk %',
+                'exit_rule': 'Target / Exit Rule',
                 'rationale': 'Dual Engine Confluence'
             })
             df_conf_disp['Current Price (₹)'] = df_conf_disp['Current Price (₹)'].apply(lambda x: f"₹{x:,.2f}")
-            df_conf_disp['Stop Loss (₹)'] = df_conf_disp['Stop Loss (₹)'].apply(lambda x: f"₹{x:,.2f}")
-            df_conf_disp['Target (₹)'] = df_conf_disp['Target (₹)'].apply(lambda x: f"₹{x:,.2f}")
+            df_conf_disp['Initial Stop Loss (₹)'] = df_conf_disp['Initial Stop Loss (₹)'].apply(lambda x: f"₹{x:,.2f}")
             st.dataframe(df_conf_disp, use_container_width=True, hide_index=True)
         else:
             col_c_info.caption("Click 'Re-Scan Both Strategies' above to refresh the dual-engine scan.")
@@ -730,25 +728,23 @@ Identifies high-probability swing trades where **BOTH** independent champion mod
                 else:
                     df_display['Start Date (Buy)'] = 'Immediate'
 
+                st.info("💡 **Strategy 1 Unlimited Runner:** There is **NO fixed profit target price**. Positions ride massive swing trends and are closed strictly by event-driven trailing exits (Chandelier Stop Loss ratchet).")
+                df_display['Exit Rule'] = 'Unlimited Runner (Trailing)'
                 df_display = df_display[[
-                    'ticker', 'Start Date (Buy)', 'alpha_score', 'close', 'target', 'stop_loss', 'target_pct', 'sl_pct', 'rrr', 'vol_surge', 'reasons'
+                    'ticker', 'Start Date (Buy)', 'alpha_score', 'close', 'stop_loss', 'sl_pct', 'Exit Rule', 'vol_surge', 'reasons'
                 ]].rename(columns={
                     'ticker': 'Ticker',
                     'alpha_score': 'Alpha Score',
                     'close': 'Current Price (₹)',
-                    'target': 'Target (₹)',
-                    'stop_loss': 'Stop Loss (₹)',
-                    'target_pct': 'Target %',
-                    'sl_pct': 'SL %',
-                    'rrr': 'RRR',
+                    'stop_loss': 'Initial Hard Stop (₹)',
+                    'sl_pct': 'Max Risk %',
+                    'Exit Rule': 'Profit Target / Exit',
                     'vol_surge': 'Vol Surge',
                     'reasons': 'Setup Confluence'
                 })
                 df_display['Current Price (₹)'] = df_display['Current Price (₹)'].apply(lambda x: f"₹{x:,.2f}")
-                df_display['Target (₹)'] = df_display['Target (₹)'].apply(lambda x: f"₹{x:,.2f}")
-                df_display['Stop Loss (₹)'] = df_display['Stop Loss (₹)'].apply(lambda x: f"₹{x:,.2f}")
-                df_display['Target %'] = df_display['Target %'].apply(lambda x: f"+{x:.1f}%")
-                df_display['SL %'] = df_display['SL %'].apply(lambda x: f"-{x:.1f}%")
+                df_display['Initial Hard Stop (₹)'] = df_display['Initial Hard Stop (₹)'].apply(lambda x: f"₹{x:,.2f}")
+                df_display['Max Risk %'] = df_display['Max Risk %'].apply(lambda x: f"-{x:.1f}%")
                 df_display['Vol Surge'] = df_display['Vol Surge'].apply(lambda x: f"{x:.1f}x")
                 st.dataframe(df_display, use_container_width=True, hide_index=True)
             else:
