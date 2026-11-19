@@ -283,6 +283,10 @@ def scan_for_swing_entries(summary: Dict):
         logger.info("Nifty 50 is Bearish. New swing entries halted to preserve capital.")
         return
 
+    active_trades = pm.get_active_trades()
+    active_syms = set(t['ticker'] for t in active_trades)
+    candidates = []
+
     # Scan Universe for Swing Golden Cross Breakouts
     db_is_current = False
     max_ts_str = None

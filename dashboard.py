@@ -544,55 +544,104 @@ with tab_live:
         st.caption("No closed trades recorded yet.")
 
 with tab_radar:
-    if strategy_mode.startswith("Strategy 2"):
-        st.subheader("🎯 Strategy 2: AI Renko Supertrend Opportunity Radar")
-        st.markdown(f"Scans stocks for **Renko Supertrend Bullish Flips** (`signal == 1`) and active green trends using **{renko_tf} Renko Bricks** ({brick_size_mode.split('[')[0].strip()}).")
-        
-        c_r1, c_r2, c_r3 = st.columns([2, 2, 3])
-        radar_renko_tf = c_r1.selectbox("Renko Timeframe", ["1D", "4H", "1H"], index=0, key="radar_renko_tf")
-        filter_fresh = c_r2.checkbox("Fresh Flips Only (Signal = 1)", value=False, help="Show only stocks that printed a new buy signal on the latest brick.")
-        btn_renko_scan = c_r3.button("🔍 Scan AI Renko Setups", type="primary", use_container_width=True)
+    st.subheader("🎯 Dual-Strategy Opportunity Radar & Alpha Screener")
+    st.markdown("Vectorized multi-factor screening across all Nifty 500 stocks for **both Strategy 1 & Strategy 2**.")
 
-        if btn_renko_scan or 'cached_renko_scan' not in st.session_state:
-            with st.spinner("Scanning Renko Supertrend setups across database..."):
-                b_pct = 0.025 if "2.5%" in brick_size_mode else (0.020 if "2.0%" in brick_size_mode else 0.015)
+    subtab_both, subtab_s1, subtab_s2 = st.tabs([
+        "🔥 Double Confluence Radar (Both Aligned!)",
+        "🏆 Strategy 1: 4H Golden Cross Runner",
+        "🧱 Strategy 2: AI Renko Supertrend"
+    ])
+
+    with subtab_both:
+        st.markdown("### 🔥 Double Confluence Master Radar (Both Strategies Aligned!)")
+        st.info("""
+**Dual-Engine Quantitative Confluence:**
+Identifies high-probability swing trades where **BOTH** independent champion models align simultaneously:
+- **Strategy 1 (4H Golden Cross):** Institutional 20/50 Golden Cross above 200 EMA + Volume Surge >= 0.8x
+- **Strategy 2 (AI Renko Supertrend):** Non-temporal 2.5% brick close + Supertrend Green Flip + +2 Bricks Break-Even protection
+*When both quantitative models agree on the same stock, statistical edge and reward-to-risk are maximized.*
+""")
+
+        s1_cached = st.session_state.get('cached_scan_results', {}).get('top_candidates', [])
+        s2_cached = st.session_state.get('cached_renko_scan', [])
+
+        col_c_btn, col_c_info = st.columns([2, 5])
+        if col_c_btn.button("🚀 Scan Both Strategies Now", type="primary", key="btn_run_confluence_scan", use_container_width=True):
+            with st.spinner("Executing dual-engine multi-factor confluence analysis across Nifty 500..."):
+                st.session_state['cached_scan_results'] = run_opportunity_scan(timeframe="4H")
                 st.session_state['cached_renko_scan'] = scan_renko_supertrend_opportunities(
                     symbols=test_symbols,
-                    timeframe=radar_renko_tf,
-                    brick_pct=b_pct,
-                    st_period=int(st_period),
-                    st_multiplier=float(st_multiplier)
+                    timeframe="1D",
+                    brick_pct=0.025,
+                    st_period=10,
+                    st_multiplier=2.0
                 )
+            st.rerun()
 
-        renko_opps = st.session_state.get('cached_renko_scan', [])
-        if filter_fresh:
-            renko_opps = [o for o in renko_opps if o['is_fresh_flip']]
+        s1_dict = {c['ticker']: c for c in st.session_state.get('cached_scan_results', {}).get('top_candidates', [])}
+        s2_list = st.session_state.get('cached_renko_scan', [])
 
-        st.subheader(f"Renko Supertrend Opportunities ({len(renko_opps)} qualifying)")
-        if renko_opps:
-            df_ro = pd.DataFrame(renko_opps)
-            df_ro_disp = df_ro[['ticker', 'alpha_score', 'price', 'brick_size', 'stop_loss', 'risk_pct', 'supertrend', 'reasons']].rename(columns={
+        confluence_list = []
+        for c2 in s2_list:
+            sym = c2['ticker']
+            if sym in s1_dict:
+                c1 = s1_dict[sym]
+                is_fresh = c2.get('is_fresh_flip', False)
+                vol = float(c1.get('vol_surge', 1.0))
+                
+                conf_score = 100
+                if is_fresh: conf_score += 25
+                if vol >= 1.3: conf_score += 15
+                elif vol >= 0.8: conf_score += 10
+                if c1.get('alpha_score', 70) >= 80: conf_score += 10
+
+                confluence_list.append({
+                    "ticker": sym,
+                    "confluence_rank": "⭐⭐⭐⭐⭐ Ultra" if conf_score >= 130 else "⭐⭐⭐⭐ High",
+                    "confluence_score": conf_score,
+                    "price": c2['price'],
+                    "s1_alpha": f"{c1.get('alpha_score', 75):.0f}",
+                    "s2_status": "Fresh Flip (Buy)" if is_fresh else "Green Trend Active",
+                    "vol_surge": f"{vol:.1f}x",
+                    "stop_loss": c2['stop_loss'],
+                    "target": c1.get('target', c2['price'] * 1.10),
+                    "target_pct": f"+{c1.get('target_pct', 10.0):.1f}%",
+                    "sl_pct": f"-{c2.get('risk_pct', 2.5):.1f}%",
+                    "rationale": f"4H Golden Cross + Renko {c2['reasons']} (Vol {vol:.1f}x)"
+                })
+
+        confluence_list.sort(key=lambda x: x['confluence_score'], reverse=True)
+
+        if confluence_list:
+            st.success(f"🏆 Found **{len(confluence_list)} Dual-Strategy Confluence Candidates** confirming buy signals on BOTH engines!")
+            df_conf = pd.DataFrame(confluence_list)
+            df_conf_disp = df_conf[[
+                'ticker', 'confluence_rank', 'price', 's1_alpha', 's2_status', 'vol_surge', 'stop_loss', 'target', 'target_pct', 'sl_pct', 'rationale'
+            ]].rename(columns={
                 'ticker': 'Ticker',
-                'alpha_score': 'Alpha Score',
+                'confluence_rank': 'Confluence Tier',
                 'price': 'Current Price (₹)',
-                'brick_size': 'Brick Size (₹)',
+                's1_alpha': 'Strategy 1 Alpha',
+                's2_status': 'Strategy 2 Renko',
+                'vol_surge': 'Vol Surge',
                 'stop_loss': 'Stop Loss (₹)',
-                'risk_pct': 'Initial Risk %',
-                'supertrend': 'Supertrend (₹)',
-                'reasons': 'Signal Status'
+                'target': 'Target (₹)',
+                'target_pct': 'Target %',
+                'sl_pct': 'SL %',
+                'rationale': 'Dual Engine Confluence'
             })
-            df_ro_disp['Current Price (₹)'] = df_ro_disp['Current Price (₹)'].apply(lambda x: f"₹{x:,.2f}")
-            df_ro_disp['Brick Size (₹)'] = df_ro_disp['Brick Size (₹)'].apply(lambda x: f"₹{x:,.2f}")
-            df_ro_disp['Stop Loss (₹)'] = df_ro_disp['Stop Loss (₹)'].apply(lambda x: f"₹{x:,.2f}")
-            df_ro_disp['Supertrend (₹)'] = df_ro_disp['Supertrend (₹)'].apply(lambda x: f"₹{x:,.2f}")
-            df_ro_disp['Initial Risk %'] = df_ro_disp['Initial Risk %'].apply(lambda x: f"-{x:.1f}%")
-            st.dataframe(df_ro_disp, use_container_width=True, hide_index=True)
+            df_conf_disp['Current Price (₹)'] = df_conf_disp['Current Price (₹)'].apply(lambda x: f"₹{x:,.2f}")
+            df_conf_disp['Stop Loss (₹)'] = df_conf_disp['Stop Loss (₹)'].apply(lambda x: f"₹{x:,.2f}")
+            df_conf_disp['Target (₹)'] = df_conf_disp['Target (₹)'].apply(lambda x: f"₹{x:,.2f}")
+            st.dataframe(df_conf_disp, use_container_width=True, hide_index=True)
         else:
-            st.info("No Renko Supertrend setups match the current filter. Try unchecking 'Fresh Flips Only' to view all active trends.")
-    else:
-        st.subheader("🎯 Daily Opportunity Radar & Capital Rotation Engine")
-        st.markdown("Vectorized multi-factor screening across 490+ NSE stocks in `market_data.db`.")
-        
+            col_c_info.caption("Click 'Scan Both Strategies Now' above to check all 499 Nifty stocks across both engines.")
+
+    with subtab_s1:
+        st.markdown("### 🏆 Strategy 1: 4H Golden Cross Unlimited Runner")
+        st.caption("Institutional 20/50 Golden Crosses above 200 EMA with Active Volume & Chandelier trailing.")
+
         regime = get_market_regime(timeframe="4H")
         col_reg1, col_reg2, col_reg3 = st.columns(3)
         col_reg1.metric("Market Regime (Nifty 50)", regime['status'], delta=f"Close: ₹{regime['nifty_close']:,.2f}")
@@ -602,11 +651,11 @@ with tab_radar:
         st.markdown("---")
         c1, c2, c3 = st.columns([2, 2, 3])
         radar_tf = c1.selectbox("Scan Timeframe", ["4H", "1D", "1H"], index=0, key="radar_tf")
-        min_alpha = c2.slider("Minimum Alpha Score", min_value=50, max_value=120, value=75, step=5)
-        btn_scan = c3.button("🔍 Run Full Opportunity Scan", type="primary", use_container_width=True)
+        min_alpha = c2.slider("Minimum Alpha Score", min_value=50, max_value=120, value=75, step=5, key="radar_min_alpha")
+        btn_scan = c3.button("🔍 Run Strategy 1 Scan", type="primary", use_container_width=True, key="btn_run_s1_scan")
 
         if btn_scan or 'cached_scan_results' not in st.session_state:
-            with st.spinner("Analyzing 490+ stocks in local database..."):
+            with st.spinner("Analyzing stocks for Strategy 1 Golden Crosses..."):
                 mock_holdings = [
                     {"ticker": "INFY.NS", "entry_price": 1850.0, "entry_time": "2026-10-15 09:15:00", "qty": 20},
                     {"ticker": "TCS.NS", "entry_price": 4100.0, "entry_time": "2026-11-01 09:15:00", "qty": 10}
@@ -630,7 +679,7 @@ with tab_radar:
                 st.markdown("---")
 
             candidates = [c for c in scan_res.get('top_candidates', []) if c['alpha_score'] >= min_alpha]
-            st.subheader(f"Top Swing Opportunities ({len(candidates)} qualifying)")
+            st.subheader(f"Strategy 1 Qualifying Opportunities ({len(candidates)} qualifying)")
             if candidates:
                 df_display = pd.DataFrame(candidates)
                 if 'timestamp' in df_display.columns:
@@ -664,6 +713,52 @@ with tab_radar:
                 st.dataframe(df_display, use_container_width=True, hide_index=True)
             else:
                 st.info("No candidates match this Alpha Score threshold. Lower the slider to display more candidates.")
+
+    with subtab_s2:
+        st.markdown("### 🧱 Strategy 2: AI Renko Supertrend Multi-Stock Screener")
+        st.caption("2.5% Non-Temporal Price Bricks + Supertrend Direction + Break-Even Ratchet.")
+        
+        c_r1, c_r2, c_r3 = st.columns([2, 2, 3])
+        radar_renko_tf = c_r1.selectbox("Renko Timeframe", ["1D", "4H", "1H"], index=0, key="radar_renko_tf")
+        filter_fresh = c_r2.checkbox("Fresh Flips Only (Signal = 1)", value=False, help="Show only stocks that printed a new buy signal on the latest brick.", key="radar_fresh_flips")
+        btn_renko_scan = c_r3.button("🔍 Scan Strategy 2 Renko Setups", type="primary", use_container_width=True, key="btn_run_s2_scan")
+
+        if btn_renko_scan or 'cached_renko_scan' not in st.session_state:
+            with st.spinner("Scanning Renko Supertrend setups across database..."):
+                b_pct = 0.025
+                st.session_state['cached_renko_scan'] = scan_renko_supertrend_opportunities(
+                    symbols=test_symbols,
+                    timeframe=radar_renko_tf,
+                    brick_pct=b_pct,
+                    st_period=10,
+                    st_multiplier=2.0
+                )
+
+        renko_opps = st.session_state.get('cached_renko_scan', [])
+        if filter_fresh:
+            renko_opps = [o for o in renko_opps if o['is_fresh_flip']]
+
+        st.subheader(f"Strategy 2 Qualifying Opportunities ({len(renko_opps)} qualifying)")
+        if renko_opps:
+            df_ro = pd.DataFrame(renko_opps)
+            df_ro_disp = df_ro[['ticker', 'alpha_score', 'price', 'brick_size', 'stop_loss', 'risk_pct', 'supertrend', 'reasons']].rename(columns={
+                'ticker': 'Ticker',
+                'alpha_score': 'Alpha Score',
+                'price': 'Current Price (₹)',
+                'brick_size': 'Brick Size (₹)',
+                'stop_loss': 'Stop Loss (₹)',
+                'risk_pct': 'Initial Risk %',
+                'supertrend': 'Supertrend (₹)',
+                'reasons': 'Signal Status'
+            })
+            df_ro_disp['Current Price (₹)'] = df_ro_disp['Current Price (₹)'].apply(lambda x: f"₹{x:,.2f}")
+            df_ro_disp['Brick Size (₹)'] = df_ro_disp['Brick Size (₹)'].apply(lambda x: f"₹{x:,.2f}")
+            df_ro_disp['Stop Loss (₹)'] = df_ro_disp['Stop Loss (₹)'].apply(lambda x: f"₹{x:,.2f}")
+            df_ro_disp['Supertrend (₹)'] = df_ro_disp['Supertrend (₹)'].apply(lambda x: f"₹{x:,.2f}")
+            df_ro_disp['Initial Risk %'] = df_ro_disp['Initial Risk %'].apply(lambda x: f"-{x:.1f}%")
+            st.dataframe(df_ro_disp, use_container_width=True, hide_index=True)
+        else:
+            st.info("No Renko Supertrend setups match the current filter. Try unchecking 'Fresh Flips Only' to view all active trends.")
 
 with tab_backtest:
     if strategy_mode.startswith("Strategy 1"):
