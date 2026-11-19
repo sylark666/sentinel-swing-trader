@@ -25,6 +25,13 @@ import signal_engine
 importlib.reload(signal_engine)
 from signal_engine import calculate_indicators
 
+import strategy_renko.renko_dashboard_adapter
+importlib.reload(strategy_renko.renko_dashboard_adapter)
+from strategy_renko.renko_dashboard_adapter import (
+    simulate_renko_supertrend_portfolio,
+    scan_renko_supertrend_opportunities
+)
+
 logging.basicConfig(level=logging.INFO)
 
 # Background Telegram Bot listener daemon (runs once across sessions)
@@ -86,8 +93,8 @@ st.sidebar.header("Strategy & Execution Configuration")
 strategy_mode = st.sidebar.selectbox(
     "Active Trading Strategy",
     [
-        "Strategy 1: 4H Golden Cross Unlimited Runner [Champion]",
-        "Strategy 2: Triple-Timeframe Chandelier Matrix"
+        "Strategy 1: 4H Golden Cross Unlimited Runner [Champion #1]",
+        "Strategy 2: AI Renko Supertrend [Champion #2 - ₹80L Compounding]"
     ],
     index=0
 )
@@ -95,7 +102,7 @@ strategy_mode = st.sidebar.selectbox(
 if strategy_mode.startswith("Strategy 1"):
     st.markdown("**Strategy 1: 4H Golden Cross Unlimited Runner [v8.5 - Champion Strategy]**")
 else:
-    st.markdown("**Strategy 2: Triple-Timeframe Chandelier Matrix [v8.0]**")
+    st.markdown("**Strategy 2: AI Renko Supertrend [v9.0 - Multi-Stock Swing Champion]**")
 
 data_source = st.sidebar.selectbox("Market Data Engine", ["TradingView (Local DB)", "yfinance (Live/Cache)"], index=0)
 
@@ -247,114 +254,117 @@ if strategy_mode.startswith("Strategy 1"):
     stagnation_bars_thresh = 999
 
 else:
-    st.sidebar.info("Triple-Screen Alignment: Engine verifies trend across 3 timeframes simultaneously without lookahead bias.")
-    base_tf_selection = st.sidebar.selectbox("Base Timeframe", ["1D", "4H", "2H", "1WK", "1H"], index=0)
-
-    if data_source == "TradingView (Local DB)":
-        st.sidebar.success("⚡ Data Source: Local SQLite DB (market_data.db)")
-        eval_period = "max"
-        if base_tf_selection == "1H":
-            below_tf = "15M"
-            base_tf = "1H"
-            above_tf = "4H"
-        elif base_tf_selection == "2H":
-            below_tf = "1H"
-            base_tf = "2H"
-            above_tf = "4H"
-        elif base_tf_selection == "4H":
-            below_tf = "1H"
-            base_tf = "4H"
-            above_tf = "1D"
-        elif base_tf_selection == "1WK":
-            below_tf = "1D"
-            base_tf = "1WK"
-            above_tf = "1WK"
-        else: # 1D
-            below_tf = "4H"
-            base_tf = "1D"
-            above_tf = "1WK"
+    st.sidebar.info("🧱 AI Renko Supertrend: Non-temporal price-action bricks + Supertrend direction + Break-Even ratchet.")
+    renko_tf = st.sidebar.selectbox("Base Candle Timeframe", ["1D", "4H", "1H"], index=0, help="Candles used to construct the Renko bricks.")
+    brick_size_mode = st.sidebar.selectbox(
+        "Renko Brick Size Model",
+        [
+            "Dynamic 2.5% Daily Bricks [Sweet Spot Champion - ₹80L Compounding]",
+            "Dynamic 2.0% ATR Bricks [Fast Swing]",
+            "Tight 1.5% Bricks [High Frequency]"
+        ],
+        index=0
+    )
+    if "2.5%" in brick_size_mode:
+        brick_pct = 0.025
+    elif "2.0%" in brick_size_mode:
+        brick_pct = 0.020
     else:
-        if base_tf_selection == "1H":
-            eval_period = "60d"
-            below_tf = "30m"
-            base_tf = "1h"
-            above_tf = "2h"
-            st.sidebar.warning(f"Yahoo Finance limits sub-hourly data (30m). Simulation compressed to {eval_period}.")
-        elif base_tf_selection == "2H":
-            eval_period = "730d"
-            below_tf = "1h"
-            base_tf = "2h"
-            above_tf = "4h"
-        elif base_tf_selection == "4H":
-            eval_period = "730d"
-            below_tf = "2h"
-            base_tf = "4h"
-            above_tf = "1d"
-        else:
-            eval_period = "730d"
-            below_tf = "4h"
-            base_tf = "1d"
-            above_tf = "1wk"
+        brick_pct = 0.015
 
+    col_st1, col_st2 = st.sidebar.columns(2)
+    st_period = col_st1.number_input("Supertrend ATR Period", min_value=5, max_value=25, value=10, step=1)
+    st_multiplier = col_st2.number_input("Supertrend Multiplier", min_value=1.0, max_value=5.0, value=2.0, step=0.5)
+
+    use_be_ratchet = st.sidebar.checkbox("Asymmetric 1:1 Break-Even Ratchet (+2 Bricks)", value=True, help="Ratchets stop loss to cost once floating gain reaches +2 bricks.")
+    
+    st.sidebar.markdown("**Portfolio & Compounding Sizing**")
     initial_cap = st.sidebar.number_input("Initial Capital (₹)", value=100000, step=10000)
-    wait_bars = st.sidebar.slider("Delayed Entry (Candles to wait)", min_value=0, max_value=10, value=0, step=1)
-    tp_pct = st.sidebar.number_input("Take Profit (%)", value=6.5, step=0.5, help="Expected target move based on 2.5x ATR swing wave.")
-    sl_pct = st.sidebar.number_input("Fixed Hard Stop Loss (%)", value=0.0, step=0.5, help="Set to 0 to rely purely on 2.0x ATR dynamic stop.")
+    monthly_sip = st.sidebar.number_input("Monthly Capital Top-Up / SIP (₹)", value=5000, step=1000, help="Inject fresh savings every month to compound portfolio equity.")
+    max_positions = st.sidebar.slider("Max Concurrent Slots", min_value=3, max_value=12, value=8, step=1, help="8 to 10 slots recommended for multi-stock swing diversification.")
+    alloc_pct = 1.0 / max_positions
 
     st.sidebar.markdown("---")
-    st.sidebar.markdown("**Advanced Stop Loss Controls**")
-    use_atr_stop = st.sidebar.checkbox("Enable ATR Dynamic Stop", value=True)
-    if use_atr_stop:
-        atr_mult = st.sidebar.slider("ATR Multiplier (x)", min_value=1.0, max_value=5.0, value=2.0, step=0.1)
-    else:
-        atr_mult = 0
-        
-    use_be_stop = st.sidebar.checkbox("Enable Break-Even Trailing Stop", value=False, help="Empirical backtesting proved that early break-even stops choke trades from normal market noise.")
-    if use_be_stop:
-        be_trigger_pct = st.sidebar.number_input("Trigger Break-Even at Profit (%)", value=3.5, step=0.5)
-    else:
-        be_trigger_pct = 0
+    st.sidebar.markdown("**AI Renko Rules Active:**")
+    st.sidebar.markdown("- **Brick Construction:** 2-Brick Reversal Filter (eliminates time noise)")
+    st.sidebar.markdown("- **Entry:** On brick close when Supertrend flips Green (Buy)")
+    st.sidebar.markdown("- **Exit 1:** Break-Even lock at +2 bricks gain")
+    st.sidebar.markdown("- **Exit 2:** Full exit on Supertrend Red reversal")
+    st.sidebar.markdown("- **Friction:** Zerodha GTT delivery/futures friction modeled (~0.25%)")
 
-    st.sidebar.markdown("---")
-    st.sidebar.markdown("**Early Momentum Exits**")
-    use_ltf_exit = st.sidebar.checkbox("Enable Predictive LTF Exit (Chandelier)", value=False, help="Uses the lower timeframe Chandelier to predict a drop.")
-    if use_ltf_exit:
-        ltf_exit_wait = st.sidebar.slider("Delay LTF Exit (Candles to wait)", min_value=0, max_value=10, value=0, step=1)
-    else:
-        ltf_exit_wait = 0
-        
-    use_macd_exit = st.sidebar.checkbox("Enable MACD Momentum Exit", value=True)
-    use_rsi_exit = st.sidebar.checkbox("Enable RSI Overbought Reversal Exit", value=False)
+    # Compatibility variables
+    base_tf_selection = renko_tf
+    eval_period = "max"
+    wait_bars = 0
+    tp_pct = 0.0
+    sl_pct = 0.0
+    use_atr_stop = True
+    atr_mult = 2.0
+    use_be_stop = use_be_ratchet
+    be_trigger_pct = 0.0
+    use_ltf_exit = False
+    ltf_exit_wait = 0
+    use_macd_exit = False
+    use_rsi_exit = False
+    max_trade_val = int(initial_cap * alloc_pct)
+    min_trade_val = int(initial_cap * (alloc_pct * 0.5))
+    enable_rotation = False
+    rotation_hurdle = 999.0
+    stagnation_bars_thresh = 999
 
-    st.sidebar.markdown("**Dynamic Capital Allocation**")
-    default_max_alloc = int(initial_cap * 0.30)
-    default_min_alloc = int(initial_cap * 0.15)
-    max_trade_val = st.sidebar.number_input("Max Trade Allocation (₹)", value=default_max_alloc, step=5000, help="Dynamic 30% of account equity (allows max 3 positions).")
-    min_trade_val = st.sidebar.number_input("Min Trade Allocation (₹)", value=default_min_alloc, step=5000, help="Dynamic 15% floor to prevent small positions being eroded by fees.")
+SET_1 = [
+    "ZOMATO.NS", "HAL.NS", "IREDA.NS", "RVNL.NS", "DIXON.NS", "TRENT.NS", "BHEL.NS",
+    "ADANIENT.NS", "KPITTECH.NS", "IRFC.NS", "KALYANKJIL.NS", "MCX.NS", "DELHIVERY.NS",
+    "SUZLON.NS", "PFC.NS", "RECLTD.NS", "JINDALSTEL.NS", "LALPATHLAB.NS", "TATASTEEL.NS",
+    "RELIANCE.NS", "INFY.NS", "HDFCBANK.NS", "ITC.NS", "SBI.NS", "TCS.NS", "LT.NS",
+    "BAJFINANCE.NS", "AXISBANK.NS", "KOTAKBANK.NS", "M&M.NS", "MARUTI.NS", "SUNPHARMA.NS",
+    "TITAN.NS", "ULTRACEMCO.NS", "WIPRO.NS", "INDIGO.NS", "DLF.NS", "GODREJPROP.NS",
+    "PERSISTENT.NS", "COFORGE.NS", "TVSMOTOR.NS", "EICHERMOT.NS", "CHOLAFIN.NS",
+    "SHRIRAMFIN.NS", "POLYCAB.NS", "HAVELLS.NS", "CUMMINSIND.NS", "SIEMENS.NS", "ABB.NS",
+    "LTIM.NS"
+]
 
-    st.sidebar.markdown("---")
-    st.sidebar.markdown("**🔄 Capital Rotation (Asset Swapping)**")
-    enable_rotation = st.sidebar.checkbox("Enable Dynamic Asset Rotation", value=True, help="If capital is full, liquidate stagnant holdings to enter superior high-alpha setups.")
-    if enable_rotation:
-        rotation_hurdle = st.sidebar.slider("Rotation Alpha Hurdle (pts)", min_value=10.0, max_value=40.0, value=25.0, step=5.0, help="Minimum alpha advantage required to cover friction and swap.")
-        stagnation_bars_thresh = st.sidebar.slider("Stagnation Threshold (Bars)", min_value=3, max_value=15, value=7, step=1, help="Bars held with low progress before penalizing holding health.")
-    else:
-        rotation_hurdle = 999.0
-        stagnation_bars_thresh = 999
+SET_2 = [
+    "SBIN.NS", "BHARTIARTL.NS", "HINDUNILVR.NS", "ICICIBANK.NS", "BAJAJFINSV.NS", 
+    "ASIANPAINT.NS", "HCLTECH.NS", "TATAMOTORS.NS", "NTPC.NS", "ONGC.NS", 
+    "POWERGRID.NS", "NESTLEIND.NS", "GRASIM.NS", "TECHM.NS", "HINDALCO.NS", 
+    "JSWSTEEL.NS", "CIPLA.NS", "DRREDDY.NS", "SBILIFE.NS", "HDFCLIFE.NS", 
+    "BRITANNIA.NS", "TATACONSUM.NS", "APOLLOHOSP.NS", "DIVISLAB.NS", "HEROMOTOCO.NS", 
+    "BAJAJ-AUTO.NS", "INDUSINDBK.NS", "BANKBARODA.NS", "PNB.NS", "CANBK.NS", 
+    "IDFCFIRSTB.NS", "TATACHEM.NS", "TATAPOWER.NS", "VEDL.NS", "COALINDIA.NS", 
+    "GAIL.NS", "IOC.NS", "BPCL.NS", "HINDPETRO.NS", "AMBUJACEM.NS", 
+    "SHREECEM.NS", "ACC.NS", "ADANIPORTS.NS", "ADANIGREEN.NS", "ADANIPOWER.NS", 
+    "ATGL.NS", "AWL.NS", "TORNTPHARM.NS", "ZYDUSLIFE.NS", "LUPIN.NS"
+]
 
-    st.sidebar.markdown("---")
-    st.sidebar.markdown("**Strategy Rules Active:**")
-    st.sidebar.markdown(f"- **Alignment:** {below_tf} | {base_tf} | {above_tf} must all be in Buy Zone")
-    st.sidebar.markdown(f"- **Entry:** Chandelier Buy Zone -> Wait {wait_bars} Bars -> Confirm (MACD + 200 EMA)")
-    st.sidebar.markdown("- **Regime Filter:** Nifty 50 > 50 EMA (Blocks longs in bear market)")
-    st.sidebar.markdown("- **Sizing:** Dynamic Cash Sweeper")
-    if enable_rotation:
-        st.sidebar.markdown(f"- **Asset Rotation:** Active ✅ (Hurdle: +{rotation_hurdle:.0f} pts)")
-    else:
-        st.sidebar.markdown("- **Asset Rotation:** Disabled ❌")
-    st.sidebar.markdown(f"- **TP:** {tp_pct}% Fixed Target")
-    st.sidebar.markdown(f"- **SL:** {sl_pct}% Hard Stop OR Dynamic Trailing")
-    st.sidebar.markdown("---")
+SET_3 = [
+    "SAIL.NS", "NMDC.NS", "CONCOR.NS", "IRCTC.NS", "BOSCHLTD.NS", 
+    "MRF.NS", "PAGEIND.NS", "TATAELXSI.NS", "MPHASIS.NS", "COROMANDEL.NS", 
+    "LTTS.NS", "AUBANK.NS", "BANDHANBNK.NS", "FEDERALBNK.NS", "MUTHOOTFIN.NS", 
+    "SRF.NS", "PIIND.NS", "UPL.NS", "AARTIIND.NS", "DEEPAKNTR.NS", 
+    "NAUKRI.NS", "PAYTM.NS", "NYKAA.NS", "POLICYBZR.NS", "DMART.NS", 
+    "VBL.NS", "ZEEL.NS", "PVRINOX.NS", "SUNTV.NS", "ICICIGI.NS", 
+    "ICICIPRULI.NS", "NAM-INDIA.NS", "HDFCAMC.NS", "ABBOTINDIA.NS", "ALKEM.NS", 
+    "AUROPHARMA.NS", "BIOCON.NS", "GLENMARK.NS", "SYNGENE.NS", "PEL.NS", 
+    "MFSL.NS", "LICHSGFIN.NS", "CANFINHOME.NS", "M&MFIN.NS", "MGL.NS", 
+    "RELAXO.NS", "BATAINDIA.NS", "VOLTAS.NS", "WHIRLPOOL.NS", "CROMPTON.NS"
+]
+
+if stock_set.startswith("🔥 All Nifty 500"):
+    with get_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute("SELECT DISTINCT ticker FROM market_data WHERE ticker != 'NIFTY' ORDER BY ticker ASC")
+        test_symbols = [r[0] for r in cursor.fetchall()]
+    if not test_symbols:
+        from sync_tradingview_nifty500 import get_nifty500_symbols
+        raw_syms = get_nifty500_symbols()
+        test_symbols = [s if s.endswith(".NS") or s == "NIFTY" else f"{s}.NS" for s in raw_syms]
+elif stock_set.startswith("Set 1"):
+    test_symbols = SET_1
+elif stock_set.startswith("Set 2"):
+    test_symbols = SET_2
+else:
+    test_symbols = SET_3
 
 run_sim = st.sidebar.button("Run Simulation [Purged CV]", type="primary")
 
@@ -534,95 +544,141 @@ with tab_live:
         st.caption("No closed trades recorded yet.")
 
 with tab_radar:
-    st.subheader("🎯 Daily Opportunity Radar & Capital Rotation Engine")
-    st.markdown("Vectorized multi-factor screening across 490+ NSE stocks in `market_data.db`.")
-    
-    regime = get_market_regime(timeframe="4H")
-    col_reg1, col_reg2, col_reg3 = st.columns(3)
-    col_reg1.metric("Market Regime (Nifty 50)", regime['status'], delta=f"Close: ₹{regime['nifty_close']:,.2f}")
-    col_reg2.metric("Nifty 50 EMA", f"₹{regime['nifty_ema50']:,.2f}", delta="Regime Threshold")
-    col_reg3.metric("Status", "🟢 Active (Longs Allowed)" if regime['status'] == "BULLISH" else "🔴 Halted (Bearish Protection)")
+    if strategy_mode.startswith("Strategy 2"):
+        st.subheader("🎯 Strategy 2: AI Renko Supertrend Opportunity Radar")
+        st.markdown(f"Scans stocks for **Renko Supertrend Bullish Flips** (`signal == 1`) and active green trends using **{renko_tf} Renko Bricks** ({brick_size_mode.split('[')[0].strip()}).")
+        
+        c_r1, c_r2, c_r3 = st.columns([2, 2, 3])
+        radar_renko_tf = c_r1.selectbox("Renko Timeframe", ["1D", "4H", "1H"], index=0, key="radar_renko_tf")
+        filter_fresh = c_r2.checkbox("Fresh Flips Only (Signal = 1)", value=False, help="Show only stocks that printed a new buy signal on the latest brick.")
+        btn_renko_scan = c_r3.button("🔍 Scan AI Renko Setups", type="primary", use_container_width=True)
 
-    st.markdown("---")
-    c1, c2, c3 = st.columns([2, 2, 3])
-    radar_tf = c1.selectbox("Scan Timeframe", ["4H", "1D", "1H"], index=0, key="radar_tf")
-    min_alpha = c2.slider("Minimum Alpha Score", min_value=50, max_value=120, value=75, step=5)
-    btn_scan = c3.button("🔍 Run Full Opportunity Scan", type="primary", use_container_width=True)
+        if btn_renko_scan or 'cached_renko_scan' not in st.session_state:
+            with st.spinner("Scanning Renko Supertrend setups across database..."):
+                b_pct = 0.025 if "2.5%" in brick_size_mode else (0.020 if "2.0%" in brick_size_mode else 0.015)
+                st.session_state['cached_renko_scan'] = scan_renko_supertrend_opportunities(
+                    symbols=test_symbols,
+                    timeframe=radar_renko_tf,
+                    brick_pct=b_pct,
+                    st_period=int(st_period),
+                    st_multiplier=float(st_multiplier)
+                )
 
-    if btn_scan or 'cached_scan_results' not in st.session_state:
-        with st.spinner("Analyzing 490+ stocks in local database..."):
-            mock_holdings = [
-                {"ticker": "INFY.NS", "entry_price": 1850.0, "entry_time": "2026-10-15 09:15:00", "qty": 20},
-                {"ticker": "TCS.NS", "entry_price": 4100.0, "entry_time": "2026-11-01 09:15:00", "qty": 10}
-            ]
-            st.session_state['cached_scan_results'] = run_opportunity_scan(timeframe=radar_tf, active_holdings=mock_holdings)
+        renko_opps = st.session_state.get('cached_renko_scan', [])
+        if filter_fresh:
+            renko_opps = [o for o in renko_opps if o['is_fresh_flip']]
 
-    scan_res = st.session_state.get('cached_scan_results', {})
-    
-    if scan_res:
-        rotations = scan_res.get('rotations', [])
-        if rotations:
-            st.warning("### 🔄 Capital Rotation / Trade Swap Alert")
-            for r in rotations:
-                st.markdown(f"**Recommendation**: {r['rationale']}")
-                col_swap1, col_swap2 = st.columns(2)
-                with col_swap1:
-                    st.error(f"**[-] Liquidate Weak Holding**: `{r['exit_ticker']}`\n- Health: `{r['exit_health']}/100` | PnL: `{r['exit_pnl_pct']:.2f}%`\n- Reason: {r['exit_reason']}")
-                with col_swap2:
-                    st.success(f"**[+] Enter Superior Alpha**: `{r['enter_ticker']}`\n- Start Date (Buy): `{r.get('enter_date', 'Immediate')}`\n- Alpha Score: `{r['enter_alpha']}/100` | Target: `+{r['enter_target_pct']:.2f}%`\n- Setup: {r['enter_reasons']}")
-                st.markdown(f"**Net Alpha Edge**: `+{r['alpha_delta']} points` (Fully offsets Indian roundtrip friction ~0.35%)")
-            st.markdown("---")
-
-        candidates = [c for c in scan_res.get('top_candidates', []) if c['alpha_score'] >= min_alpha]
-        st.subheader(f"Top Swing Opportunities ({len(candidates)} qualifying)")
-        if candidates:
-            df_display = pd.DataFrame(candidates)
-            if 'timestamp' in df_display.columns:
-                if radar_tf == '1D':
-                    df_display['Start Date (Buy)'] = pd.to_datetime(df_display['timestamp']).dt.strftime('%Y-%m-%d')
-                else:
-                    df_display['Start Date (Buy)'] = pd.to_datetime(df_display['timestamp']).dt.strftime('%Y-%m-%d %H:%M')
-            else:
-                df_display['Start Date (Buy)'] = 'Immediate'
-
-            df_display = df_display[[
-                'ticker', 'Start Date (Buy)', 'alpha_score', 'close', 'target', 'stop_loss', 'target_pct', 'sl_pct', 'rrr', 'vol_surge', 'reasons'
-            ]].rename(columns={
+        st.subheader(f"Renko Supertrend Opportunities ({len(renko_opps)} qualifying)")
+        if renko_opps:
+            df_ro = pd.DataFrame(renko_opps)
+            df_ro_disp = df_ro[['ticker', 'alpha_score', 'price', 'brick_size', 'stop_loss', 'risk_pct', 'supertrend', 'reasons']].rename(columns={
                 'ticker': 'Ticker',
                 'alpha_score': 'Alpha Score',
-                'close': 'Current Price (₹)',
-                'target': 'Target (₹)',
+                'price': 'Current Price (₹)',
+                'brick_size': 'Brick Size (₹)',
                 'stop_loss': 'Stop Loss (₹)',
-                'target_pct': 'Target %',
-                'sl_pct': 'SL %',
-                'rrr': 'RRR',
-                'vol_surge': 'Vol Surge',
-                'reasons': 'Setup Confluence'
+                'risk_pct': 'Initial Risk %',
+                'supertrend': 'Supertrend (₹)',
+                'reasons': 'Signal Status'
             })
-            df_display['Current Price (₹)'] = df_display['Current Price (₹)'].apply(lambda x: f"₹{x:,.2f}")
-            df_display['Target (₹)'] = df_display['Target (₹)'].apply(lambda x: f"₹{x:,.2f}")
-            df_display['Stop Loss (₹)'] = df_display['Stop Loss (₹)'].apply(lambda x: f"₹{x:,.2f}")
-            df_display['Target %'] = df_display['Target %'].apply(lambda x: f"+{x:.1f}%")
-            df_display['SL %'] = df_display['SL %'].apply(lambda x: f"-{x:.1f}%")
-            df_display['Vol Surge'] = df_display['Vol Surge'].apply(lambda x: f"{x:.1f}x")
-            st.dataframe(df_display, use_container_width=True, hide_index=True)
+            df_ro_disp['Current Price (₹)'] = df_ro_disp['Current Price (₹)'].apply(lambda x: f"₹{x:,.2f}")
+            df_ro_disp['Brick Size (₹)'] = df_ro_disp['Brick Size (₹)'].apply(lambda x: f"₹{x:,.2f}")
+            df_ro_disp['Stop Loss (₹)'] = df_ro_disp['Stop Loss (₹)'].apply(lambda x: f"₹{x:,.2f}")
+            df_ro_disp['Supertrend (₹)'] = df_ro_disp['Supertrend (₹)'].apply(lambda x: f"₹{x:,.2f}")
+            df_ro_disp['Initial Risk %'] = df_ro_disp['Initial Risk %'].apply(lambda x: f"-{x:.1f}%")
+            st.dataframe(df_ro_disp, use_container_width=True, hide_index=True)
         else:
-            st.info("No candidates match this Alpha Score threshold. Lower the slider to display more candidates.")
+            st.info("No Renko Supertrend setups match the current filter. Try unchecking 'Fresh Flips Only' to view all active trends.")
+    else:
+        st.subheader("🎯 Daily Opportunity Radar & Capital Rotation Engine")
+        st.markdown("Vectorized multi-factor screening across 490+ NSE stocks in `market_data.db`.")
+        
+        regime = get_market_regime(timeframe="4H")
+        col_reg1, col_reg2, col_reg3 = st.columns(3)
+        col_reg1.metric("Market Regime (Nifty 50)", regime['status'], delta=f"Close: ₹{regime['nifty_close']:,.2f}")
+        col_reg2.metric("Nifty 50 EMA", f"₹{regime['nifty_ema50']:,.2f}", delta="Regime Threshold")
+        col_reg3.metric("Status", "🟢 Active (Longs Allowed)" if regime['status'] == "BULLISH" else "🔴 Halted (Bearish Protection)")
+
+        st.markdown("---")
+        c1, c2, c3 = st.columns([2, 2, 3])
+        radar_tf = c1.selectbox("Scan Timeframe", ["4H", "1D", "1H"], index=0, key="radar_tf")
+        min_alpha = c2.slider("Minimum Alpha Score", min_value=50, max_value=120, value=75, step=5)
+        btn_scan = c3.button("🔍 Run Full Opportunity Scan", type="primary", use_container_width=True)
+
+        if btn_scan or 'cached_scan_results' not in st.session_state:
+            with st.spinner("Analyzing 490+ stocks in local database..."):
+                mock_holdings = [
+                    {"ticker": "INFY.NS", "entry_price": 1850.0, "entry_time": "2026-10-15 09:15:00", "qty": 20},
+                    {"ticker": "TCS.NS", "entry_price": 4100.0, "entry_time": "2026-11-01 09:15:00", "qty": 10}
+                ]
+                st.session_state['cached_scan_results'] = run_opportunity_scan(timeframe=radar_tf, active_holdings=mock_holdings)
+
+        scan_res = st.session_state.get('cached_scan_results', {})
+        
+        if scan_res:
+            rotations = scan_res.get('rotations', [])
+            if rotations:
+                st.warning("### 🔄 Capital Rotation / Trade Swap Alert")
+                for r in rotations:
+                    st.markdown(f"**Recommendation**: {r['rationale']}")
+                    col_swap1, col_swap2 = st.columns(2)
+                    with col_swap1:
+                        st.error(f"**[-] Liquidate Weak Holding**: `{r['exit_ticker']}`\n- Health: `{r['exit_health']}/100` | PnL: `{r['exit_pnl_pct']:.2f}%`\n- Reason: {r['exit_reason']}")
+                    with col_swap2:
+                        st.success(f"**[+] Enter Superior Alpha**: `{r['enter_ticker']}`\n- Start Date (Buy): `{r.get('enter_date', 'Immediate')}`\n- Alpha Score: `{r['enter_alpha']}/100` | Target: `+{r['enter_target_pct']:.2f}%`\n- Setup: {r['enter_reasons']}")
+                    st.markdown(f"**Net Alpha Edge**: `+{r['alpha_delta']} points` (Fully offsets Indian roundtrip friction ~0.35%)")
+                st.markdown("---")
+
+            candidates = [c for c in scan_res.get('top_candidates', []) if c['alpha_score'] >= min_alpha]
+            st.subheader(f"Top Swing Opportunities ({len(candidates)} qualifying)")
+            if candidates:
+                df_display = pd.DataFrame(candidates)
+                if 'timestamp' in df_display.columns:
+                    if radar_tf == '1D':
+                        df_display['Start Date (Buy)'] = pd.to_datetime(df_display['timestamp']).dt.strftime('%Y-%m-%d')
+                    else:
+                        df_display['Start Date (Buy)'] = pd.to_datetime(df_display['timestamp']).dt.strftime('%Y-%m-%d %H:%M')
+                else:
+                    df_display['Start Date (Buy)'] = 'Immediate'
+
+                df_display = df_display[[
+                    'ticker', 'Start Date (Buy)', 'alpha_score', 'close', 'target', 'stop_loss', 'target_pct', 'sl_pct', 'rrr', 'vol_surge', 'reasons'
+                ]].rename(columns={
+                    'ticker': 'Ticker',
+                    'alpha_score': 'Alpha Score',
+                    'close': 'Current Price (₹)',
+                    'target': 'Target (₹)',
+                    'stop_loss': 'Stop Loss (₹)',
+                    'target_pct': 'Target %',
+                    'sl_pct': 'SL %',
+                    'rrr': 'RRR',
+                    'vol_surge': 'Vol Surge',
+                    'reasons': 'Setup Confluence'
+                })
+                df_display['Current Price (₹)'] = df_display['Current Price (₹)'].apply(lambda x: f"₹{x:,.2f}")
+                df_display['Target (₹)'] = df_display['Target (₹)'].apply(lambda x: f"₹{x:,.2f}")
+                df_display['Stop Loss (₹)'] = df_display['Stop Loss (₹)'].apply(lambda x: f"₹{x:,.2f}")
+                df_display['Target %'] = df_display['Target %'].apply(lambda x: f"+{x:.1f}%")
+                df_display['SL %'] = df_display['SL %'].apply(lambda x: f"-{x:.1f}%")
+                df_display['Vol Surge'] = df_display['Vol Surge'].apply(lambda x: f"{x:.1f}x")
+                st.dataframe(df_display, use_container_width=True, hide_index=True)
+            else:
+                st.info("No candidates match this Alpha Score threshold. Lower the slider to display more candidates.")
 
 with tab_backtest:
     if strategy_mode.startswith("Strategy 1"):
         st.subheader("🛡️ Strategy 1: 4H Golden Cross Unlimited Runner Backtester")
         st.markdown("Trades **4H Golden Crossovers** with **NO profit target cap**, allowing winners to ride until the 'Right Exit' (Chandelier Trailing).")
     else:
-        st.subheader("🛡️ Strategy 2: Multi-Timeframe Strategy Backtester")
-        st.markdown("Simulates the Triple-Screen Chandelier Matrix with Indian brokerage, STT, GST, and slippage friction.")
+        st.subheader("🛡️ Strategy 2: AI Renko Supertrend Multi-Stock Backtester")
+        st.markdown("Simulates the **AI Renko Supertrend Champion** (2.5% Non-Temporal Price Bricks + Supertrend + Asymmetric 1:1 Break-Even Ratchet + ₹5,000/mo SIP Compounding).")
     
     col_bt_btn, col_bt_info = st.columns([2, 5])
     btn_tab_run = col_bt_btn.button("🚀 Run Backtest Now", type="primary", use_container_width=True)
     if strategy_mode.startswith("Strategy 1"):
         col_bt_info.info(f"Targeting: **{stock_set}** on **{selected_tf} Timeframe** via **TradingView (Local DB)**.")
     else:
-        col_bt_info.info(f"Targeting: **{stock_set}** on **{base_tf_selection}** Base Timeframe via **{data_source}**.")
+        col_bt_info.info(f"Targeting: **{stock_set}** with **{renko_tf} Renko Bricks** ({brick_size_mode.split('[')[0].strip()}) via **TradingView (Local DB)**.")
 
     col1, col2, col3 = st.columns(3)
     m_profit = col1.empty()
@@ -646,61 +702,6 @@ with tab_backtest:
     ledger_placeholder.dataframe(df_trades_empty, use_container_width=True, hide_index=True)
 
 if run_sim or btn_tab_run:
-    SET_1 = [
-        "ZOMATO.NS", "HAL.NS", "IREDA.NS", "RVNL.NS", "DIXON.NS", "TRENT.NS", "BHEL.NS",
-        "ADANIENT.NS", "KPITTECH.NS", "IRFC.NS", "KALYANKJIL.NS", "MCX.NS", "DELHIVERY.NS",
-        "SUZLON.NS", "PFC.NS", "RECLTD.NS", "JINDALSTEL.NS", "LALPATHLAB.NS", "TATASTEEL.NS",
-        "RELIANCE.NS", "INFY.NS", "HDFCBANK.NS", "ITC.NS", "SBI.NS", "TCS.NS", "LT.NS",
-        "BAJFINANCE.NS", "AXISBANK.NS", "KOTAKBANK.NS", "M&M.NS", "MARUTI.NS", "SUNPHARMA.NS",
-        "TITAN.NS", "ULTRACEMCO.NS", "WIPRO.NS", "INDIGO.NS", "DLF.NS", "GODREJPROP.NS",
-        "PERSISTENT.NS", "COFORGE.NS", "TVSMOTOR.NS", "EICHERMOT.NS", "CHOLAFIN.NS",
-        "SHRIRAMFIN.NS", "POLYCAB.NS", "HAVELLS.NS", "CUMMINSIND.NS", "SIEMENS.NS", "ABB.NS",
-        "LTIM.NS"
-    ]
-    
-    SET_2 = [
-        "SBIN.NS", "BHARTIARTL.NS", "HINDUNILVR.NS", "ICICIBANK.NS", "BAJAJFINSV.NS", 
-        "ASIANPAINT.NS", "HCLTECH.NS", "TATAMOTORS.NS", "NTPC.NS", "ONGC.NS", 
-        "POWERGRID.NS", "NESTLEIND.NS", "GRASIM.NS", "TECHM.NS", "HINDALCO.NS", 
-        "JSWSTEEL.NS", "CIPLA.NS", "DRREDDY.NS", "SBILIFE.NS", "HDFCLIFE.NS", 
-        "BRITANNIA.NS", "TATACONSUM.NS", "APOLLOHOSP.NS", "DIVISLAB.NS", "HEROMOTOCO.NS", 
-        "BAJAJ-AUTO.NS", "INDUSINDBK.NS", "BANKBARODA.NS", "PNB.NS", "CANBK.NS", 
-        "IDFCFIRSTB.NS", "TATACHEM.NS", "TATAPOWER.NS", "VEDL.NS", "COALINDIA.NS", 
-        "GAIL.NS", "IOC.NS", "BPCL.NS", "HINDPETRO.NS", "AMBUJACEM.NS", 
-        "SHREECEM.NS", "ACC.NS", "ADANIPORTS.NS", "ADANIGREEN.NS", "ADANIPOWER.NS", 
-        "ATGL.NS", "AWL.NS", "TORNTPHARM.NS", "ZYDUSLIFE.NS", "LUPIN.NS"
-    ]
-    
-    SET_3 = [
-        "SAIL.NS", "NMDC.NS", "CONCOR.NS", "IRCTC.NS", "BOSCHLTD.NS", 
-        "MRF.NS", "PAGEIND.NS", "TATAELXSI.NS", "MPHASIS.NS", "COROMANDEL.NS", 
-        "LTTS.NS", "AUBANK.NS", "BANDHANBNK.NS", "FEDERALBNK.NS", "MUTHOOTFIN.NS", 
-        "SRF.NS", "PIIND.NS", "UPL.NS", "AARTIIND.NS", "DEEPAKNTR.NS", 
-        "NAUKRI.NS", "PAYTM.NS", "NYKAA.NS", "POLICYBZR.NS", "DMART.NS", 
-        "VBL.NS", "ZEEL.NS", "PVRINOX.NS", "SUNTV.NS", "ICICIGI.NS", 
-        "ICICIPRULI.NS", "NAM-INDIA.NS", "HDFCAMC.NS", "ABBOTINDIA.NS", "ALKEM.NS", 
-        "AUROPHARMA.NS", "BIOCON.NS", "GLENMARK.NS", "SYNGENE.NS", "PEL.NS", 
-        "MFSL.NS", "LICHSGFIN.NS", "CANFINHOME.NS", "M&MFIN.NS", "MGL.NS", 
-        "RELAXO.NS", "BATAINDIA.NS", "VOLTAS.NS", "WHIRLPOOL.NS", "CROMPTON.NS"
-    ]
-
-    if stock_set.startswith("🔥 All Nifty 500"):
-        with get_connection() as conn:
-            cursor = conn.cursor()
-            cursor.execute("SELECT DISTINCT ticker FROM market_data WHERE ticker != 'NIFTY' ORDER BY ticker ASC")
-            test_symbols = [r[0] for r in cursor.fetchall()]
-        if not test_symbols:
-            from sync_tradingview_nifty500 import get_nifty500_symbols
-            raw_syms = get_nifty500_symbols()
-            test_symbols = [s if s.endswith(".NS") or s == "NIFTY" else f"{s}.NS" for s in raw_syms]
-    elif stock_set.startswith("Set 1"):
-        test_symbols = SET_1
-    elif stock_set.startswith("Set 2"):
-        test_symbols = SET_2
-    else:
-        test_symbols = SET_3
-        
-    
     if strategy_mode.startswith("Strategy 1"):
         entry_trigger = "SWING_GC"
         if "Classic GC" in gc_entry_selection:
@@ -869,386 +870,131 @@ if run_sim or btn_tab_run:
             st.sidebar.warning("No Golden Cross trades triggered on the selected stock set.")
 
     else:
-        engine = EngineMechanics(initial_capital=initial_cap, max_positions=999)
-        progress_bar = st.progress(0, text="Clearing Cache & Fetching Market Data...")
-    
-        if data_source != "TradingView (Local DB)":
-            # Clear yfinance cache to force fresh timestamp alignment
-            import os
-            import glob
-            cache_files = glob.glob("market_data_cache/*.csv")
-            for f in cache_files:
-                try: os.remove(f)
-                except: pass
+        # STRATEGY 2: AI RENKO SUPERTREND BACKTESTER
+        progress_bar = st.progress(0, text="Initializing AI Renko Supertrend Simulation...")
 
-        # 1. Fetch Nifty 50 Regime Filter Data
-        df_nifty = load_data_source("NIFTY", "1D", data_source, period=eval_period)
-        if not df_nifty.empty:
-            df_nifty['Nifty_EMA50'] = df_nifty['close'].ewm(span=50, adjust=False).mean()
-            df_nifty['Regime_Bullish'] = (df_nifty['close'] > df_nifty['Nifty_EMA50']).astype(int)
-            df_nifty = df_nifty.set_index('timestamp')
-            df_nifty = df_nifty[['Regime_Bullish']].shift(1) # Prevent lookahead bias by shifting 1 day
-        else:
-            df_nifty = pd.DataFrame(columns=['Regime_Bullish'])
+        def update_pbar(pct, text):
+            progress_bar.progress(pct, text=text)
 
-        dfs = {}
-        all_timestamps = set()
+        b_pct = 0.025 if "2.5%" in brick_size_mode else (0.020 if "2.0%" in brick_size_mode else 0.015)
 
-        for idx, sym in enumerate(test_symbols):
-            progress_bar.progress((idx + 1) / len(test_symbols), text=f"Processing [{data_source}]: {sym} ({idx+1}/{len(test_symbols)})")
+        results = simulate_renko_supertrend_portfolio(
+            symbols=test_symbols,
+            timeframe=renko_tf,
+            brick_pct=b_pct,
+            st_period=int(st_period),
+            st_multiplier=float(st_multiplier),
+            initial_cap=float(initial_cap),
+            monthly_sip=float(monthly_sip),
+            max_positions=int(max_positions),
+            use_be_ratchet=bool(use_be_ratchet),
+            progress_callback=update_pbar
+        )
 
-            # Fetch all 3 timeframes
-            df_below = load_data_source(sym, below_tf, data_source, period=eval_period)
-            df_base = load_data_source(sym, base_tf, data_source, period=eval_period)
-            df_above = load_data_source(sym, above_tf, data_source, period=eval_period)
-
-            if df_base.empty or df_below.empty or df_above.empty:
-                continue
-
-            df_below = calculate_indicators(df_below).set_index('timestamp')
-            df_base = calculate_indicators(df_base).set_index('timestamp')
-            df_above = calculate_indicators(df_above).set_index('timestamp')
-
-            # Extract target indicators and shift 'Above' to prevent lookahead bias
-            df_below = df_below[['Dir']].rename(columns={'Dir': 'Dir_Below'})
-            df_above = df_above[['Dir']].shift(1).rename(columns={'Dir': 'Dir_Above'})
-
-            # Forward fill alignment onto Base Timeframe
-            combined_idx = df_base.index.union(df_below.index).union(df_above.index).union(df_nifty.index)
-            df_below_reindexed = df_below.reindex(combined_idx).ffill()
-            df_above_reindexed = df_above.reindex(combined_idx).ffill()
-            df_nifty_reindexed = df_nifty.reindex(combined_idx).ffill()
-
-            df_base['Dir_Below'] = df_below_reindexed['Dir_Below'].loc[df_base.index]
-            df_base['Dir_Above'] = df_above_reindexed['Dir_Above'].loc[df_base.index]
-            df_base['Regime_Bullish'] = df_nifty_reindexed['Regime_Bullish'].loc[df_base.index].fillna(1)
-
-            df_base = df_base.dropna(subset=['Dir', 'MACD', 'EMA200'])
-            if df_base.empty: continue
-
-            dfs[sym] = df_base.to_dict('index')
-            all_timestamps.update(dfs[sym].keys())
-
-        all_timestamps = sorted(list(all_timestamps))
-
-        available_equity = float(initial_cap)
-        open_positions = {}
-        armed_states = {sym: {'active': False, 'bars_waited': 0} for sym in test_symbols}
-
-        all_trades = []
-        trade_id = 1
-        equity_curve = []
-        equity_curve_dates = []
-
-        progress_bar.progress(1.0, text="Executing Triple-Screen Backtest...")
-
-        for ts in all_timestamps:
-            symbols_to_remove = []
-
-            # 1. Update Exits
-            for sym, pos in open_positions.items():
-                pos['bars_held'] = pos.get('bars_held', 0) + 1
-                if ts not in dfs[sym]: continue
-
-                row = dfs[sym][ts]
-                c = row['close']
-
-                exit_price = None
-                reason = ""
-
-                # 0. Break-Even Activation Check
-                if use_be_stop and not pos.get('be_activated', False):
-                    current_profit_pct = ((row['high'] - pos['entry_price']) / pos['entry_price']) * 100
-                    if current_profit_pct >= be_trigger_pct:
-                        pos['hard_sl_price'] = pos['entry_price'] * 1.001 # Move SL to slightly above entry
-                        pos['be_activated'] = True
-
-                if row['high'] >= pos['target_price']:
-                    exit_price = pos['target_price']
-                    reason = f"Target Hit ({tp_pct}%)"
-                elif (sl_pct > 0 or use_atr_stop or pos.get('be_activated', False)) and row['low'] <= pos.get('hard_sl_price', 0):
-                    exit_price = pos['hard_sl_price']
-                    if pos.get('be_activated', False):
-                        reason = "Break-Even SL Hit (0%)"
-                    elif use_atr_stop:
-                        reason = f"ATR SL Hit ({atr_mult}x)"
-                    else:
-                        reason = f"Hard SL Hit (-{sl_pct}%)"
-                elif use_ltf_exit and row.get('Dir_Below', 1) == -1:
-                    if pos.get('ltf_wait_count', 0) >= ltf_exit_wait:
-                        exit_price = c
-                        reason = f"Predictive LTF Exit ({below_tf})"
-                    else:
-                        pos['ltf_wait_count'] = pos.get('ltf_wait_count', 0) + 1
-
-                elif row['Dir'] == -1: # Sell Zone Starts on Base Timeframe
-                    exit_price = c
-                    reason = "Dynamic SL Triggered (Chandelier)"
-                elif use_macd_exit and row.get('MACD_Cross_Down', False):
-                    exit_price = c
-                    reason = "Early Exit (MACD Momentum Loss)"
-                elif use_rsi_exit and row.get('RSI_Reversal', False):
-                    exit_price = c
-                    reason = "Early Exit (RSI Overbought Reversal)"
-
-                if use_ltf_exit and row.get('Dir_Below', 1) == 1:
-                    pos['ltf_wait_count'] = 0 # Reset wait counter if it flips back to buy zone
-
-                if exit_price:
-                    gross_buy = pos['qty'] * pos['entry_price']
-                    gross_sell = pos['qty'] * exit_price
-
-                    fric_buy = engine.calculate_friction(gross_buy, is_buy=True)
-                    fric_sell = engine.calculate_friction(gross_sell, is_buy=False)
-                    total_fric = fric_buy + fric_sell
-
-                    net_pnl_rs = (gross_sell - gross_buy) - total_fric
-                    pnl_pct = (net_pnl_rs / gross_buy) * 100
-
-                    available_equity += gross_sell - fric_sell
-
-                    all_trades.append({
-                        "Trade ID": trade_id,
-                        "Ticker": sym,
-                        "Alpha Score": f"{pos.get('alpha_score', 85.0):.0f}",
-                        "Entry Date": pos['entry_date'].strftime("%Y-%m-%d %H:%M"),
-                        "Entry Price": f"₹{pos['entry_price']:.2f}",
-                        "Exit Date": ts.strftime("%Y-%m-%d %H:%M"),
-                        "Exit Price": f"₹{exit_price:.2f}",
-                        "Gross Buy (₹)": f"₹{gross_buy:.2f}",
-                        "Gross Sell (₹)": f"₹{gross_sell:.2f}",
-                        "Net Amount (₹)": f"₹{net_pnl_rs:.2f}",
-                        "PnL %": pnl_pct,
-                        "Status": reason,
-                        "net_rs": net_pnl_rs
-                    })
-                    trade_id += 1
-                    symbols_to_remove.append(sym)
-
-            for sym in symbols_to_remove:
-                del open_positions[sym]
-
-            # 2. State Machine: Arming and Wait Confirmation
-            for sym in test_symbols:
-                if sym not in dfs or ts not in dfs[sym]: continue
-                if sym in open_positions: continue
-
-                row = dfs[sym][ts]
-                c = row['close']
-
-                # TRIPLE SCREEN ALIGNMENT CONDITION
-                triple_screen_buy = (row['Dir'] == 1) and (row['Dir_Below'] == 1) and (row['Dir_Above'] == 1)
-
-                # REGIME FILTER CONDITION
-                market_regime_safe = (row.get('Regime_Bullish', 1) == 1)
-
-                # If armed, increment wait counter
-                if armed_states[sym]['active']:
-                    # Ensure Triple Screen remains in buy zone AND Market Regime is safe during the wait
-                    if triple_screen_buy and market_regime_safe:
-                        if armed_states[sym]['bars_waited'] == wait_bars:
-                            # 2 Extra Indicator Confirmation on Base Timeframe
-                            if (row['MACD'] > row['MACD_Signal']) and (c > row['EMA200']):
-                                # Dynamic Sizing Logic
-                                alloc = max_trade_val
-                                if available_equity < alloc:
-                                    alloc = available_equity
-
-                                can_enter = alloc >= min_trade_val
-                                rotated_from = None
-
-                                # --- DYNAMIC ASSET ROTATION LOGIC ---
-                                if not can_enter and enable_rotation and open_positions:
-                                    # 1. Score candidate alpha (0 - 100)
-                                    cand_alpha = 70.0
-                                    if c > row.get('EMA50', c): cand_alpha += 15
-                                    if row.get('Vol_Surge', 1.0) >= 1.3: cand_alpha += 15
-                                    if row.get('RSI', 50) >= 50: cand_alpha += 10
-
-                                    # 2. Evaluate Health of all currently open positions
-                                    weakest_sym = None
-                                    weakest_health = 999.0
-
-                                    for h_sym, h_pos in open_positions.items():
-                                        if ts not in dfs[h_sym]: continue
-                                        h_row = dfs[h_sym][ts]
-                                        h_c = h_row['close']
-                                        h_entry = h_pos['entry_price']
-                                        h_pnl = ((h_c - h_entry) / h_entry) * 100
-                                        bars_held = h_pos.get('bars_held', 0)
-
-                                        health = 70.0
-                                        if h_pnl >= 2.0: health += 25
-                                        elif h_pnl > 0: health += 10
-                                        elif h_pnl <= -1.5: health -= 25
-
-                                        # Penalize stagnation
-                                        if bars_held >= stagnation_bars_thresh and h_pnl < 1.0:
-                                            health -= min(35, (bars_held - stagnation_bars_thresh + 1) * 6)
-
-                                        # Penalize momentum decay
-                                        if h_row.get('MACD', 0) < h_row.get('MACD_Signal', 0):
-                                            health -= 15
-
-                                        if health < weakest_health:
-                                            weakest_health = health
-                                            weakest_sym = h_sym
-
-                                    # 3. Check if candidate alpha differential beats hurdle
-                                    if weakest_sym and (cand_alpha - weakest_health) >= rotation_hurdle:
-                                        w_pos = open_positions[weakest_sym]
-                                        w_row = dfs[weakest_sym][ts]
-                                        w_exit = w_row['close']
-
-                                        w_buy = w_pos['qty'] * w_pos['entry_price']
-                                        w_sell = w_pos['qty'] * w_exit
-                                        w_fric = engine.calculate_friction(w_buy, True) + engine.calculate_friction(w_sell, False)
-                                        w_net = (w_sell - w_buy) - w_fric
-                                        w_pct = (w_net / w_buy) * 100
-
-                                        available_equity += (w_sell - engine.calculate_friction(w_sell, False))
-
-                                        all_trades.append({
-                                            "Trade ID": trade_id,
-                                            "Ticker": weakest_sym,
-                                            "Alpha Score": f"{w_pos.get('alpha_score', 85.0):.0f}",
-                                            "Entry Date": w_pos['entry_date'].strftime("%Y-%m-%d %H:%M"),
-                                            "Entry Price": f"₹{w_pos['entry_price']:.2f}",
-                                            "Exit Date": ts.strftime("%Y-%m-%d %H:%M"),
-                                            "Exit Price": f"₹{w_exit:.2f}",
-                                            "Gross Buy (₹)": f"₹{w_buy:.2f}",
-                                            "Gross Sell (₹)": f"₹{w_sell:.2f}",
-                                            "Net Amount (₹)": f"₹{w_net:.2f}",
-                                            "PnL %": w_pct,
-                                            "Status": f"Rotated Out (Health: {weakest_health:.0f}) -> Swapped to {sym}",
-                                            "net_rs": w_net
-                                        })
-                                        trade_id += 1
-                                        del open_positions[weakest_sym]
-
-                                        alloc = min(max_trade_val, available_equity)
-                                        can_enter = alloc >= min_trade_val
-                                        rotated_from = weakest_sym
-
-                                if can_enter:
-                                    entry_price = c * 1.002
-                                    qty = int(alloc / entry_price)
-
-                                    if qty > 0:
-                                        gross_buy = qty * entry_price
-                                        fric_buy = engine.calculate_friction(gross_buy, is_buy=True)
-                                        if available_equity >= (gross_buy + fric_buy):
-                                            available_equity -= (gross_buy + fric_buy)
-
-                                            if use_atr_stop:
-                                                hard_sl = entry_price - (row['ATR'] * atr_mult)
-                                            else:
-                                                hard_sl = entry_price * (1 - (sl_pct / 100))
-
-                                            cand_score = 70.0
-                                            if c > row.get('EMA50', c): cand_score += 15
-                                            if row.get('Vol_Surge', 1.0) >= 1.3: cand_score += 15
-                                            if row.get('RSI', 50) >= 50: cand_score += 10
-
-                                            open_positions[sym] = {
-                                                'qty': qty,
-                                                'entry_price': entry_price,
-                                                'entry_date': ts,
-                                                'target_price': entry_price * (1 + (tp_pct / 100)),
-                                                'hard_sl_price': hard_sl,
-                                                'be_activated': False,
-                                                'ltf_wait_count': 0,
-                                                'bars_held': 0,
-                                                'alpha_score': cand_score,
-                                                'rotated_from': rotated_from
-                                            }
-
-                            armed_states[sym]['active'] = False
-                            armed_states[sym]['bars_waited'] = 0
-                        else:
-                            armed_states[sym]['bars_waited'] += 1
-                    else:
-                        # Dropped out of Triple-Screen buy zone during wait, disarm
-                        armed_states[sym]['active'] = False
-                        armed_states[sym]['bars_waited'] = 0
-
-                # SCANNING: Look for Triple Screen Buy Zone entry
-                if not armed_states[sym]['active']:
-                    # The exact moment ALL 3 timeframes align AND Market Regime is healthy
-                    if triple_screen_buy and market_regime_safe and not ((row.get('Prev_Dir', -1) == 1) and (row.get('Prev_Dir_Below', -1) == 1) and (row.get('Prev_Dir_Above', -1) == 1)):
-                         armed_states[sym]['active'] = True
-                         armed_states[sym]['bars_waited'] = 0
-
-                # Track previous state to detect the "flip" moment
-                dfs[sym][ts]['Prev_Dir'] = row['Dir']
-                dfs[sym][ts]['Prev_Dir_Below'] = row['Dir_Below']
-                dfs[sym][ts]['Prev_Dir_Above'] = row['Dir_Above']
-
-            # 3. Mark to Market Equity
-            mtm_value = available_equity
-            for sym, pos in open_positions.items():
-                if ts in dfs[sym]:
-                    mtm_value += pos['qty'] * dfs[sym][ts]['close']
-                else:
-                    mtm_value += pos['qty'] * pos['entry_price']
-
-            equity_curve.append(mtm_value)
-            equity_curve_dates.append(ts)
-
-        time.sleep(0.5)
+        time.sleep(0.3)
         progress_bar.empty()
 
-        if all_trades:
-            df_res = pd.DataFrame(all_trades)
+        if results and results.get("total_trades", 0) > 0:
+            df_trades = results["trades_df"]
+            total_net_pnl = results["total_net_pnl"]
+            roi_pct = results["roi_pct"]
+            win_rate = results["win_rate"]
+            max_dd = results["max_drawdown_pct"]
+            equity_curve = results["equity_curve"]
+            equity_dates = results["equity_dates"]
 
-            total_profit = equity_curve[-1] - initial_cap
-            win_rate = (len(df_res[df_res['net_rs'] > 0]) / len(df_res)) * 100
+            m_profit.metric(
+                label="Net Profit (Friction Applied)", 
+                value=f"₹{total_net_pnl:,.2f}", 
+                delta=f"{roi_pct:.2f}% (Invested: ₹{results['total_invested']:,.2f})"
+            )
+            m_dd.metric(label="Max Drawdown", value=f"{max_dd:.2f}%")
+            m_win.metric(
+                label="Win Rate", 
+                value=f"{win_rate:.1f}%", 
+                delta=f"PF: {results['profit_factor']:.2f} | Trades: {results['total_trades']}"
+            )
 
-            eq_arr = np.array(equity_curve)
-            max_eq = np.maximum.accumulate(eq_arr)
-            dd = (max_eq - eq_arr) / max_eq * 100
-            max_dd = np.max(dd) if len(dd) > 0 else 0
-
-            m_profit.metric("Net Profit (Friction Applied)", f"₹{total_profit:,.2f}", f"{(total_profit/initial_cap)*100:.2f}%")
-            m_dd.metric("Max Drawdown", f"{max_dd:.2f}%")
-            m_win.metric("Win Rate", f"{win_rate:.1f}%")
-
+            # Plotly Equity Curve
             fig2 = go.Figure()
-            fig2.add_trace(go.Scatter(x=equity_curve_dates, y=equity_curve, mode='lines', name='Portfolio Value', line=dict(color='#00ff88', width=2)))
-            fig2.update_layout(template="plotly_dark", height=400, margin=dict(l=20, r=20, t=20, b=20), plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)')
+            fig2.add_trace(go.Scatter(
+                x=equity_dates, 
+                y=equity_curve, 
+                mode='lines', 
+                name='AI Renko Compounding Portfolio', 
+                line=dict(color='#00ff88', width=2.5)
+            ))
+            fig2.update_layout(
+                template="plotly_dark", 
+                height=420, 
+                margin=dict(l=20, r=20, t=20, b=20), 
+                plot_bgcolor='rgba(0,0,0,0)', 
+                paper_bgcolor='rgba(0,0,0,0)',
+                xaxis_title="Date",
+                yaxis_title="Portfolio Valuation (₹)"
+            )
             chart_placeholder.plotly_chart(fig2, use_container_width=True)
 
-            df_res_display = df_res.drop(columns=['net_rs'])
-            df_res_display['PnL %'] = df_res_display['PnL %'].apply(lambda x: f"{x:.2f}%")
-            ledger_placeholder.dataframe(df_res_display, use_container_width=True, hide_index=True)
+            # Display Trade Ledger
+            df_display = df_trades.copy()
+            if 'entry_date' in df_display.columns:
+                df_display['Entry Date'] = pd.to_datetime(df_display['entry_date']).dt.strftime('%Y-%m-%d')
+            if 'exit_date' in df_display.columns:
+                df_display['Exit Date'] = pd.to_datetime(df_display['exit_date']).dt.strftime('%Y-%m-%d')
+            
+            df_display = df_display.rename(columns={
+                'ticker': 'Ticker',
+                'entry_price': 'Entry Price (₹)',
+                'exit_price': 'Exit Price (₹)',
+                'gross_buy': 'Gross Buy (₹)',
+                'gross_sell': 'Gross Sell (₹)',
+                'net_pnl': 'Net PnL (₹)',
+                'pnl_pct': 'PnL %',
+                'max_runup_pct': 'Peak Run-up %',
+                'days_held': 'Days Held',
+                'reason': 'Exit Reason'
+            })
+            
+            # Formatting
+            df_display['Entry Price (₹)'] = df_display['Entry Price (₹)'].apply(lambda x: f"₹{x:,.2f}")
+            df_display['Exit Price (₹)'] = df_display['Exit Price (₹)'].apply(lambda x: f"₹{x:,.2f}")
+            df_display['Gross Buy (₹)'] = df_display['Gross Buy (₹)'].apply(lambda x: f"₹{x:,.2f}")
+            df_display['Gross Sell (₹)'] = df_display['Gross Sell (₹)'].apply(lambda x: f"₹{x:,.2f}")
+            df_display['Net PnL (₹)'] = df_display['Net PnL (₹)'].apply(lambda x: f"₹{x:,.2f}")
+            df_display['PnL %'] = df_display['PnL %'].apply(lambda x: f"{x:+.2f}%")
+            df_display['Peak Run-up %'] = df_display['Peak Run-up %'].apply(lambda x: f"+{x:.2f}%")
+            
+            cols_to_show = [
+                'Trade ID', 'Ticker', 'Alpha Score', 'Entry Date', 'Entry Price (₹)',
+                'Exit Date', 'Exit Price (₹)', 'Net PnL (₹)', 'PnL %', 'Peak Run-up %',
+                'Days Held', 'Exit Reason'
+            ]
+            cols_present = [c for c in cols_to_show if c in df_display.columns]
+            ledger_placeholder.dataframe(df_display[cols_present], use_container_width=True, hide_index=True)
 
-            csv_data_s2 = df_res_display.to_csv(index=False).encode('utf-8')
+            csv_data_s2 = df_trades.to_csv(index=False).encode('utf-8')
             st.download_button(
                 label="📥 Download Trades Ledger as CSV",
                 data=csv_data_s2,
-                file_name="simulation_trades_strategy2.csv",
+                file_name=f"simulation_trades_renko_supertrend_{renko_tf}.csv",
                 mime="text/csv",
                 key="dl_trades_csv_strat2"
             )
+            st.sidebar.success(f"✅ AI Renko Supertrend Simulation Complete! Trades: {len(df_trades)}")
 
-            st.sidebar.success(f"✅ Strategy 2 Matrix Complete! Trades: {len(df_res)}")
+            st.markdown("### 🏆 Strategy 2 State Checks (AI Renko Supertrend)")
+            st.info(f"""
+**Engine Mechanics Active (AI Renko Supertrend Champion #2):**
+- Brick Mode: `{brick_size_mode}` (Non-temporal noise reduction) ✅
+- Supertrend Indicator: `Period {st_period}, Multiplier {st_multiplier}` on Renko close ✅
+- Break-Even Ratchet: `+2 Bricks (+{b_pct*200:.1f}%)` $\\rightarrow$ Move SL to Cost ✅
+- Asymmetric Convexity: Let winners ride through Supertrend green run ✅
+- Compounding Engine: ₹{initial_cap:,.0f} Initial + ₹{monthly_sip:,.0f}/month SIP injection ✅
+- Concurrency Cap: Max `{max_positions}` positions ({100/max_positions:.1f}% allocation per slot) ✅
+- Friction Model: Full Indian delivery taxes & fees deducted (~0.25% - 0.35%) ✅
+""")
         else:
-            st.sidebar.warning("No trades triggered under the Triple-Timeframe Matrix.")
-
-        st.markdown("### Strategy 2 State Checks")
-        st.info("""
-**Engine Mechanics Active:**
-- Nifty 50 Macro Regime Filter (>50 EMA): Active ✅
-- Triple-Screen Timeframe Alignment: Active ✅
-- Anti-Lookahead Temporal Shifting: Active ✅
-- 2-Bar Delayed Confirmation Engine: Active ✅
-- Tiered Remaining Equity Sizing: Disabled ❌
-- Dynamic Min/Max Cash Sweeper Allocator: Active ✅
-- ATR-Based Emergency Stop Loss: Optional ✅
-- Break-Even Trailing Stop Loss: Optional ✅
-- Predictive LTF Early Exit: Optional ✅
-- Momentum Exits (MACD/RSI): Optional ✅
-        """)
+            st.sidebar.warning("No Renko Supertrend trades triggered on the selected stock set.")
 
 with tab_db:
     st.subheader("📊 Local Database Storage (market_data.db)")

@@ -2,19 +2,21 @@ name: Sentinel-Swing Hourly Market Scanner
 
 on:
   schedule:
-    # Checkpoint 1: 10:15 AM IST (04:45 UTC) Mon-Fri (1h Post-Open Check)
-    - cron: '45 4 * * 1-5'
-    # Checkpoint 2: 11:15 AM IST (05:45 UTC) Mon-Fri (Mid-Morning Check)
-    - cron: '45 5 * * 1-5'
-    # Checkpoint 3: 12:15 PM IST (06:45 UTC) Mon-Fri (Noon Check)
-    - cron: '45 6 * * 1-5'
-    # Checkpoint 4: 01:15 PM IST (07:45 UTC) Mon-Fri (4H Bar Sync Check)
-    - cron: '45 7 * * 1-5'
-    # Checkpoint 5: 02:15 PM IST (08:45 UTC) Mon-Fri (Mid-Afternoon Check)
-    - cron: '45 8 * * 1-5'
-    # Checkpoint 6: 03:15 PM IST (09:45 UTC) Mon-Fri (Pre-Close 15m Assessment)
-    - cron: '45 9 * * 1-5'
-    # Checkpoint 7: 05:30 PM IST (12:00 UTC) Mon-Fri (Post-Market Close Settlement & CSV Ledger)
+    # Checkpoint 1: 09:45 AM IST (04:15 UTC) Mon-Fri (Morning Volatility Bypass & Open Status)
+    - cron: '15 4 * * 1-5'
+    # Checkpoint 2: 10:45 AM IST (05:15 UTC) Mon-Fri (Mid-Morning Check)
+    - cron: '15 5 * * 1-5'
+    # Checkpoint 3: 11:45 AM IST (06:15 UTC) Mon-Fri (Late Morning Check)
+    - cron: '15 6 * * 1-5'
+    # Checkpoint 4: 12:45 PM IST (07:15 UTC) Mon-Fri (Mid-Day Check)
+    - cron: '15 7 * * 1-5'
+    # Checkpoint 5: 01:45 PM IST (08:15 UTC) Mon-Fri (Post-13:15 4H Bar Sync)
+    - cron: '15 8 * * 1-5'
+    # Checkpoint 6: 02:45 PM IST (09:15 UTC) Mon-Fri (Afternoon Momentum Check)
+    - cron: '15 9 * * 1-5'
+    # Checkpoint 7: 03:20 PM IST (09:50 UTC) Mon-Fri (Pre-Close 10m Execution Call)
+    - cron: '50 9 * * 1-5'
+    # Checkpoint 8: 05:30 PM IST (12:00 UTC) Mon-Fri (Post-Market Close Settlement & CSV Ledger)
     - cron: '0 12 * * 1-5'
   workflow_dispatch:
 

@@ -288,55 +288,88 @@ def scan_for_swing_entries(summary: Dict):
         universe = [r[0] for r in cur.fetchall()]
 
     if not universe:
-        logger.info("Universe empty in local DB. Skipping scanner.")
-        return
+        logger.info("Local DB empty (Cloud Runner Mode). Scanning liquid Nifty universe directly via live feed...")
+        CLOUD_LIQUID_UNIVERSE = [
+            "POONAWALLA.NS", "LTFOODS.NS", "KARURVYSYA.NS", "AETHER.NS", "CEMPRO.NS",
+            "ADANIPORTS.NS", "ADANIGREEN.NS", "ANANDRATHI.NS", "BEL.NS", "HAL.NS",
+            "DIXON.NS", "TRENT.NS", "BSE.NS", "CDSL.NS", "ZOMATO.NS", "MCX.NS",
+            "KALYANKJIL.NS", "POLYCAB.NS", "SUZLON.NS", "PERSISTENT.NS", "COFORGE.NS"
+        ]
+        for sym in CLOUD_LIQUID_UNIVERSE:
+            if sym in active_syms:
+                continue
+            try:
+                t = yf.Ticker(sym)
+                df_h = t.history(period="60d", interval="1h")
+                if df_h.empty or len(df_h) < 40:
+                    continue
+                df_h = df_h.reset_index()
+                df_h.rename(columns={"Close": "close", "High": "high", "Low": "low", "Open": "open", "Volume": "volume", "Datetime": "timestamp"}, inplace=True)
+                df_feat = calculate_4h_indicators(df_h, chandelier_mult=3.0)
+                if df_feat.empty:
+                    continue
+                b = df_feat.iloc[-1].to_dict()
+                c = float(b['close'])
+                atr = float(b.get('ATR', 0))
+                is_gc = (b.get('EMA20', 0) > b.get('EMA50', 0)) and (c > b.get('EMA200', 0))
+                vol_surge = float(b.get('Vol_Surge', 1.0))
+                if is_gc and vol_surge >= 0.8:
+                    alpha = 100.0
+                    hard_sl = round(c - (2.3 * atr), 2) if atr > 0 else round(c * 0.95, 2)
+                    candidates.append({
+                        "ticker": sym,
+                        "price": c,
+                        "atr": atr,
+                        "stop_loss": hard_sl,
+                        "alpha_score": alpha,
+                        "reasons": f"20/50 Golden Cross above 200 EMA | Cloud Live Scan (Vol {vol_surge:.1f}x)"
+                    })
+            except Exception as e:
+                logger.warning(f"Error scanning {sym} via cloud fallback: {e}")
+    else:
+        for sym in universe:
+            if sym in active_syms:
+                continue
 
-    candidates = []
-    active_syms = {p['ticker'] for p in pm.get_active_trades()}
+            raw_df = load_candles_from_db(sym, timeframe="4H")
+            if raw_df.empty or len(raw_df) < 50:
+                continue
 
-    for sym in universe:
-        if sym in active_syms:
-            continue
+            feat_df = calculate_4h_indicators(raw_df, chandelier_mult=3.0)
+            if feat_df.empty:
+                continue
 
-        raw_df = load_candles_from_db(sym, timeframe="4H")
-        if raw_df.empty or len(raw_df) < 50:
-            continue
+            b = feat_df.iloc[-1].to_dict()
+            c = float(b['close'])
+            atr = float(b.get('ATR', 0))
 
-        feat_df = calculate_4h_indicators(raw_df, chandelier_mult=3.0)
-        if feat_df.empty:
-            continue
+            # Swing GC Trigger: 20 EMA > 50 EMA above 200 EMA + Active Volume >= 0.8x
+            is_gc = b.get('GC_20_50', False) and (c > b.get('EMA200', 0))
+            vol_surge = float(b.get('Vol_Surge', 1.0))
 
-        b = feat_df.iloc[-1].to_dict()
-        c = float(b['close'])
-        atr = float(b.get('ATR', 0))
+            if is_gc and vol_surge >= 0.8:
+                alpha = 70.0 + 30.0
+                reasons = ["20/50 Golden Cross above 200 EMA"]
 
-        # Swing GC Trigger: 20 EMA > 50 EMA above 200 EMA + Active Volume >= 0.8x
-        is_gc = b.get('GC_20_50', False) and (c > b.get('EMA200', 0))
-        vol_surge = float(b.get('Vol_Surge', 1.0))
+                if vol_surge >= 1.3:
+                    alpha += 15.0
+                    reasons.append(f"High Vol Surge ({vol_surge:.1f}x)")
+                else:
+                    reasons.append(f"Active Vol ({vol_surge:.1f}x)")
 
-        if is_gc and vol_surge >= 0.8:
-            alpha = 70.0 + 30.0
-            reasons = ["20/50 Golden Cross above 200 EMA"]
+                if b.get('Chandelier_Dir', 0) == 1:
+                    alpha += 10.0
+                    reasons.append("Chandelier Buy Zone Aligned")
 
-            if vol_surge >= 1.3:
-                alpha += 15.0
-                reasons.append(f"High Vol Surge ({vol_surge:.1f}x)")
-            else:
-                reasons.append(f"Active Vol ({vol_surge:.1f}x)")
-
-            if b.get('Chandelier_Dir', 0) == 1:
-                alpha += 10.0
-                reasons.append("Chandelier Buy Zone Aligned")
-
-            hard_sl = round(c - (2.3 * atr), 2) if atr > 0 else round(c * 0.95, 2)
-            candidates.append({
-                "ticker": sym,
-                "price": c,
-                "atr": atr,
-                "stop_loss": hard_sl,
-                "alpha_score": alpha,
-                "reasons": " | ".join(reasons)
-            })
+                hard_sl = round(c - (2.3 * atr), 2) if atr > 0 else round(c * 0.95, 2)
+                candidates.append({
+                    "ticker": sym,
+                    "price": c,
+                    "atr": atr,
+                    "stop_loss": hard_sl,
+                    "alpha_score": alpha,
+                    "reasons": " | ".join(reasons)
+                })
 
     candidates.sort(key=lambda x: x['alpha_score'], reverse=True)
     high_alpha_options = [c for c in candidates if c['alpha_score'] >= 110.0]
@@ -413,13 +446,14 @@ def execute_hourly_checkpoint(checkpoint_title: str):
 def run_market_scheduler():
     """
     Main loop that triggers the hourly checkpoints during trading days:
-    - 10:15 AM IST (Checkpoint 1 - 1h after open)
-    - 11:15 AM IST (Checkpoint 2 - 2h after open)
-    - 12:15 PM IST (Checkpoint 3 - 3h after open)
-    - 01:15 PM IST (Checkpoint 4 - 4H bar sync)
-    - 02:15 PM IST (Checkpoint 5 - 5h after open)
-    - 03:15 PM IST (Checkpoint 6 - Pre-close 15 mins before 3:30 close)
-    - 05:30 PM IST (Checkpoint 7 - Post-close 5:30 PM wrap-up & CSV ledger)
+    - 09:45 AM IST (Checkpoint 1 - Morning Volatility Bypass & Open Status)
+    - 10:45 AM IST (Checkpoint 2 - Mid-Morning Check)
+    - 11:45 AM IST (Checkpoint 3 - Late Morning Check)
+    - 12:45 PM IST (Checkpoint 4 - Mid-Day Check)
+    - 01:45 PM IST (Checkpoint 5 - Post-13:15 4H Bar Sync)
+    - 02:45 PM IST (Checkpoint 6 - Afternoon Momentum Check)
+    - 03:20 PM IST (Checkpoint 7 - Pre-Close 10m Execution Call)
+    - 05:30 PM IST (Checkpoint 8 - Post-Market Close Settlement & CSV Ledger)
     """
     logger.info("Live Market Service running in background. Waiting for hourly checkpoints...")
 
@@ -427,13 +461,14 @@ def run_market_scheduler():
     current_date = datetime.now(IST).date()
 
     SCHEDULE = [
-        ("CP1", dtime(10, 15), dtime(10, 25), "10:15 AM IST (1h Post-Open Checkpoint)"),
-        ("CP2", dtime(11, 15), dtime(11, 25), "11:15 AM IST (Mid-Morning Checkpoint)"),
-        ("CP3", dtime(12, 15), dtime(12, 25), "12:15 PM IST (Noon Checkpoint)"),
-        ("CP4", dtime(13, 15), dtime(13, 25), "01:15 PM IST (4H Bar Sync Checkpoint)"),
-        ("CP5", dtime(14, 15), dtime(14, 25), "02:15 PM IST (Mid-Afternoon Checkpoint)"),
-        ("CP6", dtime(15, 15), dtime(15, 28), "03:15 PM IST (Pre-Close Final Call Checkpoint)"),
-        ("CP7", dtime(17, 30), dtime(17, 45), "05:30 PM IST (Post-Market Close Settlement)")
+        ("CP1", dtime(9, 45), dtime(9, 58), "09:45 AM IST (Morning Volatility Bypass & Open Status)"),
+        ("CP2", dtime(10, 45), dtime(10, 58), "10:45 AM IST (Mid-Morning Checkpoint)"),
+        ("CP3", dtime(11, 45), dtime(11, 58), "11:45 AM IST (Late Morning Checkpoint)"),
+        ("CP4", dtime(12, 45), dtime(12, 58), "12:45 PM IST (Mid-Day Checkpoint)"),
+        ("CP5", dtime(13, 45), dtime(13, 58), "01:45 PM IST (Post-13:15 4H Bar Sync Checkpoint)"),
+        ("CP6", dtime(14, 45), dtime(14, 58), "02:45 PM IST (Afternoon Momentum Checkpoint)"),
+        ("CP7", dtime(15, 20), dtime(15, 28), "03:20 PM IST (Pre-Close 10m Execution Call)"),
+        ("CP8", dtime(17, 30), dtime(17, 45), "05:30 PM IST (Post-Market Close Settlement)")
     ]
 
     while True:
