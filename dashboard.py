@@ -419,8 +419,10 @@ with tab_live:
     if active_trades:
         df_act = pd.DataFrame(active_trades)
         cmps = []
-        pnl_strs = []
-        total_unrealized_pnl = 0.0
+        gross_pnl_strs = []
+        net_pnl_strs = []
+        total_gross_pnl = 0.0
+        total_net_pnl = 0.0
 
         for idx, row in df_act.iterrows():
             sym = row['ticker']
@@ -429,18 +431,30 @@ with tab_live:
             cmp = get_live_or_cached_cmp(sym, entry)
             gross_b = q * entry
             gross_c = q * cmp
+
+            # 1. Gross PnL (Matches your Broker / Zerodha / Groww terminal)
+            gross_pnl = gross_c - gross_b
+            gross_pnl_pct = (gross_pnl / gross_b) * 100 if gross_b > 0 else 0.0
+            total_gross_pnl += gross_pnl
+
+            # 2. Net PnL (After STT, GST, brokerage & friction buffer)
             fric = pm.calculate_friction(gross_c, is_buy=False) + pm.calculate_friction(gross_b, is_buy=True)
-            pnl = (gross_c - gross_b) - fric
-            pnl_pct = (pnl / gross_b) * 100 if gross_b > 0 else 0.0
-            total_unrealized_pnl += pnl
+            net_pnl = gross_pnl - fric
+            net_pnl_pct = (net_pnl / gross_b) * 100 if gross_b > 0 else 0.0
+            total_net_pnl += net_pnl
 
             cmps.append(f"₹{cmp:,.2f}")
-            pnl_color = "🟢 +" if pnl >= 0 else "🔴 -"
-            pnl_sign = "+" if pnl >= 0 else ""
-            pnl_strs.append(f"{pnl_color}₹{abs(pnl):,.2f} ({pnl_sign}{pnl_pct:.2f}%)")
+            g_col = "🟢 +" if gross_pnl >= 0 else "🔴 -"
+            g_sign = "+" if gross_pnl >= 0 else ""
+            gross_pnl_strs.append(f"{g_col}₹{abs(gross_pnl):,.2f} ({g_sign}{gross_pnl_pct:.2f}%)")
+
+            n_col = "🟢 +" if net_pnl >= 0 else "🔴 -"
+            n_sign = "+" if net_pnl >= 0 else ""
+            net_pnl_strs.append(f"{n_col}₹{abs(net_pnl):,.2f} ({n_sign}{net_pnl_pct:.2f}%)")
 
         df_act['CMP'] = cmps
-        df_act['Current PnL'] = pnl_strs
+        df_act['Gross PnL'] = gross_pnl_strs
+        df_act['Net PnL'] = net_pnl_strs
         df_act['Entry Date'] = pd.to_datetime(df_act['entry_date']).dt.strftime('%Y-%m-%d %H:%M')
         df_act['Entry Price'] = df_act['entry_price'].apply(lambda x: f"₹{x:,.2f}")
         df_act['Current Stop'] = df_act['current_trailing_stop'].apply(lambda x: f"₹{x:,.2f}")
@@ -450,11 +464,12 @@ with tab_live:
         if 'strategy' not in df_act.columns:
             df_act['strategy'] = 'Strategy 1: 4H Golden Cross Runner'
 
-        pnl_badge = f"🟢 +₹{total_unrealized_pnl:,.2f}" if total_unrealized_pnl >= 0 else f"🔴 -₹{abs(total_unrealized_pnl):,.2f}"
-        st.subheader(f"🟢 Active Swing Positions ({len(active_trades)}) — Total Unrealized PnL: {pnl_badge}")
+        g_badge = f"🟢 +₹{total_gross_pnl:,.2f}" if total_gross_pnl >= 0 else f"🔴 -₹{abs(total_gross_pnl):,.2f}"
+        n_badge = f"+₹{total_net_pnl:,.2f}" if total_net_pnl >= 0 else f"-₹{abs(total_net_pnl):,.2f}"
+        st.subheader(f"🟢 Active Swing Positions ({len(active_trades)}) — Unrealized PnL: {g_badge} Broker Gross ({n_badge} Net)")
 
-        df_act_disp = df_act[['ticker', 'strategy', 'qty', 'Entry Price', 'CMP', 'Current PnL', 'Current Stop', 'Initial Stop', 'Slot Size', 'Ratchet Stage', 'status', 'Entry Date']].rename(columns={
-            'ticker': 'Ticker', 'strategy': 'Strategy', 'qty': 'Shares', 'CMP': 'Current Price (CMP)', 'Current PnL': 'Current Net PnL', 'status': 'Status'
+        df_act_disp = df_act[['ticker', 'strategy', 'qty', 'Entry Price', 'CMP', 'Gross PnL', 'Net PnL', 'Current Stop', 'Initial Stop', 'Slot Size', 'Ratchet Stage', 'status', 'Entry Date']].rename(columns={
+            'ticker': 'Ticker', 'strategy': 'Strategy', 'qty': 'Shares', 'CMP': 'Current Price (CMP)', 'Gross PnL': 'Broker PnL (Gross)', 'Net PnL': 'Est. Take-Home (Net)', 'status': 'Status'
         })
         st.dataframe(df_act_disp, use_container_width=True, hide_index=True)
     else:
