@@ -668,6 +668,8 @@ Identifies high-probability swing trades where **BOTH** independent champion mod
         s1_dict = {c['ticker']: c for c in s1_cached_cands}
         s2_list = s2_cached_list
 
+        slot_alloc = pm.get_portfolio_summary().get('slot_target_allocation', 27500.0)
+
         confluence_list = []
         for c2 in s2_list:
             sym = c2['ticker']
@@ -675,6 +677,9 @@ Identifies high-probability swing trades where **BOTH** independent champion mod
                 c1 = s1_dict[sym]
                 is_fresh = c2.get('is_fresh_flip', False)
                 vol = float(c1.get('vol_surge', 1.0))
+                p = float(c2['price'])
+                sug_qty = max(1, int(slot_alloc // p)) if p > 0 else 1
+                est_cost = sug_qty * p
                 
                 conf_score = 100
                 if is_fresh: conf_score += 25
@@ -686,7 +691,9 @@ Identifies high-probability swing trades where **BOTH** independent champion mod
                     "ticker": sym,
                     "confluence_rank": "⭐⭐⭐⭐⭐ Ultra" if conf_score >= 130 else "⭐⭐⭐⭐ High",
                     "confluence_score": conf_score,
-                    "price": c2['price'],
+                    "price": p,
+                    "sug_qty": f"{sug_qty} shs",
+                    "est_cost": est_cost,
                     "s1_alpha": f"{c1.get('alpha_score', 75):.0f}",
                     "s2_status": "Fresh Flip (Buy)" if is_fresh else "Green Trend Active",
                     "vol_surge": f"{vol:.1f}x",
@@ -700,41 +707,45 @@ Identifies high-probability swing trades where **BOTH** independent champion mod
 
         if confluence_list:
             st.success(f"🏆 Found **{len(confluence_list)} Dual-Strategy Confluence Candidates** confirming buy signals on BOTH engines!")
-            st.info("💡 **Exit Protocol:** Both Champion Strategies operate on **Unlimited Runners with Trailing Exits** (no fixed profit caps). Positions are held to ride massive trends and closed only when an event-driven exit triggers (Chandelier Trailing Stop or Renko Supertrend Red Flip).")
+            st.info(f"💡 **Position Sizing:** Quantities and costs are dynamically calibrated to your **₹{slot_alloc:,.2f} Slot Sizing** (30% account equity). Both strategies operate as **Unlimited Runners** with trailing exits.")
             df_conf = pd.DataFrame(confluence_list)
             df_conf_disp = df_conf[[
-                'ticker', 'confluence_rank', 'price', 's1_alpha', 's2_status', 'vol_surge', 'stop_loss', 'sl_pct', 'exit_rule', 'rationale'
+                'ticker', 'confluence_rank', 'price', 'sug_qty', 'est_cost', 's1_alpha', 's2_status', 'vol_surge', 'stop_loss', 'sl_pct', 'exit_rule', 'rationale'
             ]].rename(columns={
                 'ticker': 'Ticker',
                 'confluence_rank': 'Confluence Tier',
                 'price': 'Current Price (₹)',
+                'sug_qty': 'Suggested Shares',
+                'est_cost': 'Target Cost (₹)',
                 's1_alpha': 'Strategy 1 Alpha',
                 's2_status': 'Strategy 2 Renko',
                 'vol_surge': 'Vol Surge',
-                'stop_loss': 'Initial Stop Loss (₹)',
+                'stop_loss': 'Initial Hard Stop (₹)',
                 'sl_pct': 'Max Risk %',
                 'exit_rule': 'Target / Exit Rule',
                 'rationale': 'Dual Engine Confluence'
             })
             df_conf_disp['Current Price (₹)'] = df_conf_disp['Current Price (₹)'].apply(lambda x: f"₹{x:,.2f}")
-            df_conf_disp['Initial Stop Loss (₹)'] = df_conf_disp['Initial Stop Loss (₹)'].apply(lambda x: f"₹{x:,.2f}")
+            df_conf_disp['Target Cost (₹)'] = df_conf_disp['Target Cost (₹)'].apply(lambda x: f"₹{x:,.2f}")
+            df_conf_disp['Initial Hard Stop (₹)'] = df_conf_disp['Initial Hard Stop (₹)'].apply(lambda x: f"₹{x:,.2f}")
             st.dataframe(df_conf_disp, use_container_width=True, hide_index=True)
         else:
             col_c_info.caption("Click 'Re-Scan Both Strategies' above to refresh the dual-engine scan.")
 
         st.markdown("---")
-        st.markdown("### 📊 Top Buy Recommendations by Strategy")
+        st.markdown(f"### 📊 Top Buy Recommendations by Strategy (Sized for ₹{slot_alloc:,.0f}/slot)")
         col_rec1, col_rec2 = st.columns(2)
         with col_rec1:
             st.markdown("#### 🏆 Strategy 1: Top 4H Golden Cross Breakouts")
             if s1_cached_cands:
                 df_s1_top = pd.DataFrame(s1_cached_cands[:8])
-                df_s1_top_disp = df_s1_top[['ticker', 'alpha_score', 'close', 'stop_loss', 'target_pct', 'vol_surge', 'reasons']].rename(columns={
-                    'ticker': 'Ticker', 'alpha_score': 'Alpha', 'close': 'CMP (₹)', 'stop_loss': 'SL (₹)', 'target_pct': 'Target %', 'vol_surge': 'Vol Surge', 'reasons': 'Setup'
+                df_s1_top['Suggested Shares'] = df_s1_top['close'].apply(lambda p: f"{max(1, int(slot_alloc // p))} shs" if p > 0 else "1 shs")
+                df_s1_top['Target Cost (₹)'] = df_s1_top['close'].apply(lambda p: f"₹{(max(1, int(slot_alloc // p)) * p):,.2f}" if p > 0 else "₹0.00")
+                df_s1_top_disp = df_s1_top[['ticker', 'alpha_score', 'close', 'Suggested Shares', 'Target Cost (₹)', 'stop_loss', 'vol_surge', 'reasons']].rename(columns={
+                    'ticker': 'Ticker', 'alpha_score': 'Alpha', 'close': 'CMP (₹)', 'stop_loss': 'SL (₹)', 'vol_surge': 'Vol Surge', 'reasons': 'Setup'
                 })
                 df_s1_top_disp['CMP (₹)'] = df_s1_top_disp['CMP (₹)'].apply(lambda x: f"₹{x:,.2f}")
                 df_s1_top_disp['SL (₹)'] = df_s1_top_disp['SL (₹)'].apply(lambda x: f"₹{x:,.2f}")
-                df_s1_top_disp['Target %'] = df_s1_top_disp['Target %'].apply(lambda x: f"+{x:.1f}%")
                 df_s1_top_disp['Vol Surge'] = df_s1_top_disp['Vol Surge'].apply(lambda x: f"{x:.1f}x")
                 st.dataframe(df_s1_top_disp, use_container_width=True, hide_index=True)
             else:
@@ -744,7 +755,9 @@ Identifies high-probability swing trades where **BOTH** independent champion mod
             st.markdown("#### 🧱 Strategy 2: Top AI Renko Supertrend Setups")
             if s2_list:
                 df_s2_top = pd.DataFrame(s2_list[:8])
-                df_s2_top_disp = df_s2_top[['ticker', 'alpha_score', 'price', 'brick_size', 'stop_loss', 'risk_pct', 'reasons']].rename(columns={
+                df_s2_top['Suggested Shares'] = df_s2_top['price'].apply(lambda p: f"{max(1, int(slot_alloc // p))} shs" if p > 0 else "1 shs")
+                df_s2_top['Target Cost (₹)'] = df_s2_top['price'].apply(lambda p: f"₹{(max(1, int(slot_alloc // p)) * p):,.2f}" if p > 0 else "₹0.00")
+                df_s2_top_disp = df_s2_top[['ticker', 'alpha_score', 'price', 'Suggested Shares', 'Target Cost (₹)', 'brick_size', 'stop_loss', 'risk_pct', 'reasons']].rename(columns={
                     'ticker': 'Ticker', 'alpha_score': 'Alpha', 'price': 'CMP (₹)', 'brick_size': 'Brick (₹)', 'stop_loss': 'SL (₹)', 'risk_pct': 'Risk %', 'reasons': 'Signal'
                 })
                 df_s2_top_disp['CMP (₹)'] = df_s2_top_disp['CMP (₹)'].apply(lambda x: f"₹{x:,.2f}")
@@ -799,6 +812,8 @@ Identifies high-probability swing trades where **BOTH** independent champion mod
             st.subheader(f"Strategy 1 Qualifying Opportunities ({len(candidates)} qualifying)")
             if candidates:
                 df_display = pd.DataFrame(candidates)
+                df_display['Suggested Shares'] = df_display['close'].apply(lambda p: f"{max(1, int(slot_alloc // p))} shs" if p > 0 else "1 shs")
+                df_display['Target Cost (₹)'] = df_display['close'].apply(lambda p: f"₹{(max(1, int(slot_alloc // p)) * p):,.2f}" if p > 0 else "₹0.00")
                 if 'timestamp' in df_display.columns:
                     if radar_tf == '1D':
                         df_display['Start Date (Buy)'] = pd.to_datetime(df_display['timestamp']).dt.strftime('%Y-%m-%d')
@@ -807,10 +822,10 @@ Identifies high-probability swing trades where **BOTH** independent champion mod
                 else:
                     df_display['Start Date (Buy)'] = 'Immediate'
 
-                st.info("💡 **Strategy 1 Unlimited Runner:** There is **NO fixed profit target price**. Positions ride massive swing trends and are closed strictly by event-driven trailing exits (Chandelier Stop Loss ratchet).")
+                st.info(f"💡 **Strategy 1 Unlimited Runner:** Positions sized dynamically for your **₹{slot_alloc:,.2f} Slot Target**. Trailing exits ride trends until Chandelier stop triggers.")
                 df_display['Exit Rule'] = 'Unlimited Runner (Trailing)'
                 df_display = df_display[[
-                    'ticker', 'Start Date (Buy)', 'alpha_score', 'close', 'stop_loss', 'sl_pct', 'Exit Rule', 'vol_surge', 'reasons'
+                    'ticker', 'Start Date (Buy)', 'alpha_score', 'close', 'Suggested Shares', 'Target Cost (₹)', 'stop_loss', 'sl_pct', 'Exit Rule', 'vol_surge', 'reasons'
                 ]].rename(columns={
                     'ticker': 'Ticker',
                     'alpha_score': 'Alpha Score',
@@ -857,7 +872,9 @@ Identifies high-probability swing trades where **BOTH** independent champion mod
         st.subheader(f"Strategy 2 Qualifying Opportunities ({len(renko_opps)} qualifying)")
         if renko_opps:
             df_ro = pd.DataFrame(renko_opps)
-            df_ro_disp = df_ro[['ticker', 'alpha_score', 'price', 'brick_size', 'stop_loss', 'risk_pct', 'supertrend', 'reasons']].rename(columns={
+            df_ro['Suggested Shares'] = df_ro['price'].apply(lambda p: f"{max(1, int(slot_alloc // p))} shs" if p > 0 else "1 shs")
+            df_ro['Target Cost (₹)'] = df_ro['price'].apply(lambda p: f"₹{(max(1, int(slot_alloc // p)) * p):,.2f}" if p > 0 else "₹0.00")
+            df_ro_disp = df_ro[['ticker', 'alpha_score', 'price', 'Suggested Shares', 'Target Cost (₹)', 'brick_size', 'stop_loss', 'risk_pct', 'supertrend', 'reasons']].rename(columns={
                 'ticker': 'Ticker',
                 'alpha_score': 'Alpha Score',
                 'price': 'Current Price (₹)',
