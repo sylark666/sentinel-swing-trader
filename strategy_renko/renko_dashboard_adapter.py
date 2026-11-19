@@ -57,6 +57,9 @@ def simulate_renko_supertrend_portfolio(
         clean_sym = sym.replace("^NSEI", "NIFTY")
         df = load_candles_from_db(clean_sym, timeframe)
         if df.empty or len(df) < 50:
+            if timeframe != "4H":
+                df = load_candles_from_db(clean_sym, "4H")
+        if df.empty or len(df) < 50:
             continue
 
         df = df.sort_values(by="timestamp").reset_index(drop=True)
@@ -283,6 +286,9 @@ def scan_renko_supertrend_opportunities(
     for sym in symbols:
         clean = sym.replace("^NSEI", "NIFTY")
         df = load_candles_from_db(clean, timeframe)
+        if df.empty or len(df) < 50:
+            if timeframe != "4H":
+                df = load_candles_from_db(clean, "4H")
         if df.empty or len(df) < 50:
             continue
         df = df.sort_values(by="timestamp").reset_index(drop=True)

@@ -563,24 +563,31 @@ Identifies high-probability swing trades where **BOTH** independent champion mod
 *When both quantitative models agree on the same stock, statistical edge and reward-to-risk are maximized.*
 """)
 
-        s1_cached = st.session_state.get('cached_scan_results', {}).get('top_candidates', [])
-        s2_cached = st.session_state.get('cached_renko_scan', [])
+        s1_cached_cands = st.session_state.get('cached_scan_results', {}).get('top_candidates', [])
+        s2_cached_list = st.session_state.get('cached_renko_scan', [])
 
         col_c_btn, col_c_info = st.columns([2, 5])
-        if col_c_btn.button("🚀 Scan Both Strategies Now", type="primary", key="btn_run_confluence_scan", use_container_width=True):
+        should_run = col_c_btn.button("🚀 Re-Scan Both Strategies", type="primary", key="btn_run_confluence_scan", use_container_width=True) or ('cached_scan_results' not in st.session_state and 'cached_renko_scan' not in st.session_state)
+
+        if should_run:
             with st.spinner("Executing dual-engine multi-factor confluence analysis across Nifty 500..."):
-                st.session_state['cached_scan_results'] = run_opportunity_scan(timeframe="4H")
+                s1_scan = run_opportunity_scan(timeframe="4H")
+                st.session_state['cached_scan_results'] = s1_scan
+                s1_cands = s1_scan.get('top_candidates', [])
+
+                renko_target_syms = list(set([c['ticker'] for c in s1_cands] + test_symbols[:50]))
                 st.session_state['cached_renko_scan'] = scan_renko_supertrend_opportunities(
-                    symbols=test_symbols,
-                    timeframe="1D",
+                    symbols=renko_target_syms,
+                    timeframe="4H",
                     brick_pct=0.025,
                     st_period=10,
                     st_multiplier=2.0
                 )
-            st.rerun()
+                s1_cached_cands = s1_cands
+                s2_cached_list = st.session_state['cached_renko_scan']
 
-        s1_dict = {c['ticker']: c for c in st.session_state.get('cached_scan_results', {}).get('top_candidates', [])}
-        s2_list = st.session_state.get('cached_renko_scan', [])
+        s1_dict = {c['ticker']: c for c in s1_cached_cands}
+        s2_list = s2_cached_list
 
         confluence_list = []
         for c2 in s2_list:
@@ -636,7 +643,40 @@ Identifies high-probability swing trades where **BOTH** independent champion mod
             df_conf_disp['Target (₹)'] = df_conf_disp['Target (₹)'].apply(lambda x: f"₹{x:,.2f}")
             st.dataframe(df_conf_disp, use_container_width=True, hide_index=True)
         else:
-            col_c_info.caption("Click 'Scan Both Strategies Now' above to check all 499 Nifty stocks across both engines.")
+            col_c_info.caption("Click 'Re-Scan Both Strategies' above to refresh the dual-engine scan.")
+
+        st.markdown("---")
+        st.markdown("### 📊 Top Buy Recommendations by Strategy")
+        col_rec1, col_rec2 = st.columns(2)
+        with col_rec1:
+            st.markdown("#### 🏆 Strategy 1: Top 4H Golden Cross Breakouts")
+            if s1_cached_cands:
+                df_s1_top = pd.DataFrame(s1_cached_cands[:8])
+                df_s1_top_disp = df_s1_top[['ticker', 'alpha_score', 'close', 'stop_loss', 'target_pct', 'vol_surge', 'reasons']].rename(columns={
+                    'ticker': 'Ticker', 'alpha_score': 'Alpha', 'close': 'CMP (₹)', 'stop_loss': 'SL (₹)', 'target_pct': 'Target %', 'vol_surge': 'Vol Surge', 'reasons': 'Setup'
+                })
+                df_s1_top_disp['CMP (₹)'] = df_s1_top_disp['CMP (₹)'].apply(lambda x: f"₹{x:,.2f}")
+                df_s1_top_disp['SL (₹)'] = df_s1_top_disp['SL (₹)'].apply(lambda x: f"₹{x:,.2f}")
+                df_s1_top_disp['Target %'] = df_s1_top_disp['Target %'].apply(lambda x: f"+{x:.1f}%")
+                df_s1_top_disp['Vol Surge'] = df_s1_top_disp['Vol Surge'].apply(lambda x: f"{x:.1f}x")
+                st.dataframe(df_s1_top_disp, use_container_width=True, hide_index=True)
+            else:
+                st.caption("No Strategy 1 candidates found in current scan.")
+
+        with col_rec2:
+            st.markdown("#### 🧱 Strategy 2: Top AI Renko Supertrend Setups")
+            if s2_list:
+                df_s2_top = pd.DataFrame(s2_list[:8])
+                df_s2_top_disp = df_s2_top[['ticker', 'alpha_score', 'price', 'brick_size', 'stop_loss', 'risk_pct', 'reasons']].rename(columns={
+                    'ticker': 'Ticker', 'alpha_score': 'Alpha', 'price': 'CMP (₹)', 'brick_size': 'Brick (₹)', 'stop_loss': 'SL (₹)', 'risk_pct': 'Risk %', 'reasons': 'Signal'
+                })
+                df_s2_top_disp['CMP (₹)'] = df_s2_top_disp['CMP (₹)'].apply(lambda x: f"₹{x:,.2f}")
+                df_s2_top_disp['Brick (₹)'] = df_s2_top_disp['Brick (₹)'].apply(lambda x: f"₹{x:,.2f}")
+                df_s2_top_disp['SL (₹)'] = df_s2_top_disp['SL (₹)'].apply(lambda x: f"₹{x:,.2f}")
+                df_s2_top_disp['Risk %'] = df_s2_top_disp['Risk %'].apply(lambda x: f"-{x:.1f}%")
+                st.dataframe(df_s2_top_disp, use_container_width=True, hide_index=True)
+            else:
+                st.caption("No Strategy 2 candidates found in current scan.")
 
     with subtab_s1:
         st.markdown("### 🏆 Strategy 1: 4H Golden Cross Unlimited Runner")
@@ -719,15 +759,16 @@ Identifies high-probability swing trades where **BOTH** independent champion mod
         st.caption("2.5% Non-Temporal Price Bricks + Supertrend Direction + Break-Even Ratchet.")
         
         c_r1, c_r2, c_r3 = st.columns([2, 2, 3])
-        radar_renko_tf = c_r1.selectbox("Renko Timeframe", ["1D", "4H", "1H"], index=0, key="radar_renko_tf")
+        radar_renko_tf = c_r1.selectbox("Renko Timeframe", ["4H", "1D", "1H"], index=0, key="radar_renko_tf")
         filter_fresh = c_r2.checkbox("Fresh Flips Only (Signal = 1)", value=False, help="Show only stocks that printed a new buy signal on the latest brick.", key="radar_fresh_flips")
         btn_renko_scan = c_r3.button("🔍 Scan Strategy 2 Renko Setups", type="primary", use_container_width=True, key="btn_run_s2_scan")
 
         if btn_renko_scan or 'cached_renko_scan' not in st.session_state:
             with st.spinner("Scanning Renko Supertrend setups across database..."):
                 b_pct = 0.025
+                scan_syms = test_symbols[:60] if len(test_symbols) > 60 else test_symbols
                 st.session_state['cached_renko_scan'] = scan_renko_supertrend_opportunities(
-                    symbols=test_symbols,
+                    symbols=scan_syms,
                     timeframe=radar_renko_tf,
                     brick_pct=b_pct,
                     st_period=10,
