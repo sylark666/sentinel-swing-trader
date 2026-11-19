@@ -32,9 +32,11 @@ import yfinance as yf
 import portfolio_manager as pm
 import dual_chandelier_engine as dce
 import notifications as notif
-from database import load_candles_from_db, get_connection
+from database import init_db, load_candles_from_db, get_connection
 from update_market_data import update_database_incremental
 from golden_cross_4h_optimizer import calculate_4h_indicators, UNIVERSE_4H
+
+init_db()
 
 logger = logging.getLogger("LiveMarketService")
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
@@ -282,13 +284,24 @@ def scan_for_swing_entries(summary: Dict):
         return
 
     # Scan Universe for Swing Golden Cross Breakouts
+    db_is_current = False
+    max_ts_str = None
     with get_connection() as conn:
         cur = conn.cursor()
+        cur.execute("SELECT MAX(timestamp) FROM market_data WHERE timeframe='4H'")
+        max_row = cur.fetchone()
+        if max_row and max_row[0]:
+            max_ts_str = max_row[0]
+            latest_dt = pd.to_datetime(max_ts_str).date()
+            today_date = datetime.now(IST).date()
+            if (today_date - latest_dt).days <= 1:
+                db_is_current = True
+
         cur.execute("SELECT DISTINCT ticker FROM market_data WHERE timeframe='4H' AND ticker != 'NIFTY' AND ticker != 'NIFTY.NS'")
         universe = [r[0] for r in cur.fetchall()]
 
-    if not universe:
-        logger.info("Local DB empty (Cloud Runner Mode). Scanning liquid Nifty universe directly via live feed...")
+    if not universe or not db_is_current:
+        logger.info(f"Local DB {'empty' if not universe else 'stale (latest bar: ' + str(max_ts_str) + ')'}. Scanning liquid Nifty universe directly via live feed...")
         CLOUD_LIQUID_UNIVERSE = [
             "POONAWALLA.NS", "LTFOODS.NS", "KARURVYSYA.NS", "AETHER.NS", "CEMPRO.NS",
             "ADANIPORTS.NS", "ADANIGREEN.NS", "ANANDRATHI.NS", "BEL.NS", "HAL.NS",
